@@ -7,9 +7,18 @@ output: html_document
 
 1. Sponsoring faculty member: 
     + Fan Li (STA 440)
-    + Maria Tackett (STA 199).
+    + Maria Tackett (STA 199)
 2. Title of dataset(s)
+    + 
+    + State of the Union Transcripts, 1970-present
 3. Description:
+  + 
+    + One-two sentence description of data file 
+    + Source(s)
+    + Why this dataset?
+    + How dataset was put together
+    + Dimensions of dataset
+  + State of the Union Transcripts 1970-present
     + One-two sentence description of data file 
     + Source(s)
     + Why this dataset?
@@ -21,4 +30,4 @@ output: html_document
 5. Technique
     + List of computational techniques (do we need to ask for VM?)
 6. Source(s)
-    + Citation
+    + State of the Union Address Transcripts obtained from The American Presidency Project (https://www.presidency.ucsb.edu/)
