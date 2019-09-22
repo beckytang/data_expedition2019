@@ -7,10 +7,60 @@ output:
     theme: "Madrid"
     colortheme: "seahorse"
     fonttheme: "structurebold"
+editor_options: 
+  chunk_output_type: console
 ---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+library(dplyr)
+library(tidytext)
+library(stringr)
+library(tidyr)
+library(scales)
+library(textdata)
+library(wordcloud)
+library(reshape2)
+library(janeaustenr)
+```
 # Introduction 
  
 
 ## What is text analysis?
 - As statisticians and data scientistis, why restrict ourselves to numeric data?
 - We can use text as data and employ statistical methods to derive patterns or trends 
+  - Example: Given some song lyrics, can we determine who the singer is? What kinds of topics/sentiments does Lizzo like to sing about?
+  
+## Tidytext
+- So far in class, you have been employing tidy data principles, and we will continue to do so here!
+- Specifically, we will work in the 'tidy text format': a table with one \textbf{token} per row
+```{r introduce_text}
+pp <- austen_books() %>%
+  filter(book == "Pride & Prejudice") %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                 ignore_case = TRUE)))) %>%
+  select(-"book")
+pp %>% slice(1:11)
+```
+- How can we make this text into a format we can work with?
+
+## Tokenizing
+- A \textbf{token} is a meanginful unit of text. For us, that will be a single word
+- Tokenizing is simply splitting a body of text into tokens, which can achieved using the function `unnest_tokens()`
+
+```{r unnest-token, echo = T}
+tidy_pp <- pp %>%
+  unnest_tokens(word, text)
+tidy_pp
+```
+
+## Tokenizing cont.
+- With the `unnest_tokens()` function, we can easily format any body of text into a user-friendly data frame
+- First argument: name of column/variable that text is being unnested into
+- Second argument: name of column/variable that is to be unnested 
+- Other details:
+  - All other columns kept
+  - Punctuation removed
+  - Defaults is to convert tokens to lowercase
+
+# Twitter Data
