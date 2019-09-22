@@ -22,6 +22,8 @@ library(wordcloud)
 library(reshape2)
 library(janeaustenr)
 library(lubridate)
+library(scales)
+
 ```
 
 # Introduction 
@@ -114,3 +116,51 @@ tidy_tweets %>%
   group_by(screen_name) %>%
   count(word, sort = T)
 ```
+
+## Word frequency
+- While it's nice to get raw counts, but we may prefer to know which words are used more often \textit{relative} to other words. For this we can look towards word frequencies:
+
+```{r frequency}
+tidy_tweets %>%
+  count(word, sort = T) %>%
+  mutate(freq = n / n()) %>%
+  head()
+
+frequency <- tidy_tweets %>%
+  group_by(screen_name) %>%
+  count(word, sort = T) %>%
+  left_join(tidy_tweets %>%
+              group_by(screen_name) %>%
+              summarise(total = n()),
+            by = "screen_name") %>%
+  mutate(freq = n / total)
+
+frequency %>%
+  head()
+```
+
+
+## Plot of word frequency
+- We can visualize the differences and similarities in word frequencies between two candidates: 
+```{r frequency-plot, warning=FALSE}
+# make into nice plot
+frequency <- frequency %>%
+  select(screen_name, word, freq) %>%
+  spread(screen_name, freq) %>%
+  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+
+# choose 2 candidates
+ggplot(frequency, aes(JoeBiden, ewarren))+
+  # hide discreteness
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
+  scale_x_log10(labels = percent_format())+
+  scale_y_log10(labels = percent_format())+
+  geom_abline(color = "blue")
+```
+- Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
+- Words far away from the blue line are favored much more by one candidate than the other
+
+## Word usage
+- Looking beyond raw frequencies, we can now begin to investigate if which candidate is more likely to use a given word in a tweet
+- To do so, we will utilize the \textbf{log-odds ratio}
