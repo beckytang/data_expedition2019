@@ -1,0 +1,16 @@
+---
+title: "Text Analysis with R"
+author: "Becky Tang and Graham Tierney"
+date: "October 3, 2019"
+output:
+  beamer_presentation:
+    theme: "Madrid"
+    colortheme: "seahorse"
+    fonttheme: "structurebold"
+---
+# Introduction 
+ 
+
+## What is text analysis?
+- As statisticians and data scientistis, why restrict ourselves to numeric data?
+- We can use text as data and employ statistical methods to derive patterns or trends 
