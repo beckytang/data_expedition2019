@@ -12,7 +12,7 @@ editor_options:
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F)
-library(dplyr)
+library(tidyverse)
 library(tidytext)
 library(stringr)
 library(tidyr)
@@ -21,7 +21,9 @@ library(textdata)
 library(wordcloud)
 library(reshape2)
 library(janeaustenr)
+library(lubridate)
 ```
+
 # Introduction 
  
 
@@ -64,3 +66,51 @@ tidy_pp
   - Defaults is to convert tokens to lowercase
 
 # Twitter Data
+
+## Democratic candidate tweets
+- Time to work with some fun data!
+- We have pulled tweets from four Democratic candidates: Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren
+```{r}
+setwd("~/Documents/data_expedition2019/data")
+tweets <- read.csv("dem_cand_tweets.csv")
+#colnames(tweets)
+tweets <- tweets %>%
+  mutate(timestamp = ymd_hms(created_at)) %>%
+  select("created_at", "screen_name", "text", "is_retweet", "retweet_count", "timestamp")
+tweets %>%
+  select("screen_name", "text") %>%
+  slice(1:2)
+```
+
+## Tidy tweets
+```{r}
+remove_reg <- "&amp;|&lt;|&gt;"
+tidy_tweets <- tweets %>%
+  #get rid of retweets
+  filter(!str_detect(text, "^RT")) %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(word, text, token = "tweets")
+head(tidy_tweets)
+```
+
+## Word counts
+- What are the most commonly tweeted words by these candidates?
+```{r}
+tidy_tweets %>%
+  count(word, sort = T)
+```
+
+## Stop words
+```{r, echo = T}
+data("stop_words")
+head(stop_words)
+tidy_tweets <- tidy_tweets %>%
+  filter(!word %in% stop_words $ word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]"))
+tidy_tweets %>%
+  count(word, sort = T)
+tidy_tweets %>%
+  group_by(screen_name) %>%
+  count(word, sort = T)
+```
