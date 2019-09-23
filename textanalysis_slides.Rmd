@@ -161,6 +161,29 @@ ggplot(frequency, aes(JoeBiden, ewarren))+
 - Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
 - Words far away from the blue line are favored much more by one candidate than the other
 
-## Word usage
-- Looking beyond raw frequencies, we can now begin to investigate if which candidate is more likely to use a given word in a tweet
+## Log-odds ratio
+- Looking beyond raw frequencies, we can now begin to investigate which candidate is more likely to use a given word in a tweet
 - To do so, we will utilize the \textbf{log-odds ratio}
+$$\text{OR}_{A:B} = \dfrac{\text{odds}_A}{\text{odds}_B} = \dfrac{\text{prob}(word)_A}{\text{prob}(word)_B}$$
+\begin{align*}
+\log \text{OR}_{A:B} = \log \left( \dfrac{\text{prob}(word)_A}{\text{prob}(word)_B}\right) &= \log \left( \dfrac{n_A / total_A}{n_B / total_B}\right) \\ 
+& \approx \log \left( \dfrac{(n+1)_A / (total+1)_A}{(n+1)_B / (total+1)_B}\right)
+\end{align*}
+
+## Word usage
+
+```{r word usage}
+candidates <- c("JoeBiden", "KamalaHarris")
+word_ratios <- tidy_tweets %>%
+  filter(screen_name %in% candidates) %>%
+  filter(!str_detect(word, "^@")) %>%
+  count(word, screen_name) %>%
+  group_by(word) %>%
+  filter(sum(n) >= 10) %>%
+  ungroup() %>%
+  spread(screen_name, n, fill = 0) %>%
+  mutate_if(is.numeric, list(~(. +1) / sum(.) + 1)) %>%
+  mutate(logratio = log(eval(parse(text = candidates[1])) / eval(parse(text = candidates[2])))) %>%
+  arrange(desc(logratio))
+
+```
