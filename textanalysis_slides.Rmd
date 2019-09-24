@@ -23,7 +23,12 @@ library(reshape2)
 library(janeaustenr)
 library(lubridate)
 library(scales)
-
+library(purrr)
+library(broom)
+library(widyr)
+library(topicmodels)
+library(igraph)
+library(ggraph)
 ```
 
 # Introduction 
@@ -228,7 +233,7 @@ tidy_tweets %>%
 
 ## Most common positive/negative words
 
-```{r}
+```{r echo = T}
 bing_counts <- tidy_tweets %>%
   inner_join(get_sentiments("bing"), by = "word") %>%
   count(word, sentiment, sort = T) 
@@ -252,13 +257,13 @@ bing_counts %>%
 - For this analysis, we should consider removing the word 'trump' as a word with positive connotation
 - To do so, we can make a custom list of stop-words:
 
-```{r}
+```{r echo = T}
 my_stop_words <- tibble(word = c("trump"), lexicon = c("custom"))
 custom_stop_words <- bind_rows(my_stop_words, stop_words)
 custom_stop_words
 ```
 
-```{r, echo = F}
+```{r echo = F}
 tidy_tweets %>%
   filter(!word %in% custom_stop_words $ word,
          !word %in% str_remove_all(custom_stop_words$word, "'"),
@@ -276,6 +281,27 @@ tidy_tweets %>%
   coord_flip()
 ```
 
+## Wordcloud
+```{r wordcloud}
+tidy_tweets %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 70))
+```
+
+## Sentiment wordcloud
+```{r sentiment-wordcloud}
+par(mar = c(2,2,2,2))
+tidy_tweets %>%
+  filter(!word %in%custom_stop_words$word,
+         !word %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word, "[a-z]")) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = T) %>%
+  # turn data frame into matrix
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(max.words = 70)
+```
+
 ## Log-odds ratio
 - Looking beyond raw frequencies, we can now begin to investigate which candidate is more likely to use a given word in a tweet
 - To do so, we will utilize the \textbf{log-odds ratio}
@@ -285,10 +311,12 @@ $$\text{OR}_{A:B} = \dfrac{\text{odds}_A}{\text{odds}_B} = \dfrac{\text{prob}(wo
 & \approx \log \left( \dfrac{(n+1)_A / (total+1)_A}{(n+1)_B / (total+1)_B}\right)
 \end{align*}
 
-## Word usage
+- Equal odds corresponds to OR = 1, which corresponds to log(OR) = 0
 
-```{r word usage}
-candidates <- c("JoeBiden", "KamalaHarris")
+## Word usage: equally likely
+
+```{r word-usage-likely}
+candidates <- c("JoeBiden", "ewarren")
 word_ratios <- tidy_tweets %>%
   filter(screen_name %in% candidates) %>%
   filter(!str_detect(word, "^@")) %>%
@@ -300,5 +328,124 @@ word_ratios <- tidy_tweets %>%
   mutate_if(is.numeric, list(~(. +1) / sum(.) + 1)) %>%
   mutate(logratio = log(eval(parse(text = candidates[1])) / eval(parse(text = candidates[2])))) %>%
   arrange(desc(logratio))
-
+word_ratios %>%
+  arrange(abs(logratio))
 ```
+
+## Word usage: higher probability from one candidate than another
+
+```{r word-usage-diff}
+word_ratios %>% 
+  group_by(logratio < 0) %>%
+  top_n(20, abs(logratio)) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, logratio))%>%
+  ggplot(aes(word, logratio, fill = logratio < 0)) +
+  geom_col(show.legend = F) +
+  coord_flip() +
+  ylab(paste("log odds ratio", candidates[1], "/", candidates[2])) +
+  scale_fill_discrete(name = "", labels = c(candidates[1], candidates[2]))
+```
+
+- So Biden talks a lot about himself, whereas Warren talks more about political buzzwords
+
+## Moving beyond one-word tokens
+
+- We do not have to constrain ourselves to one-word tokens. In fact, we can tokenize text into consecutive sequences of words called \textbf{n-grams}
+  - Our usual one-word token is a `unigram'
+  - Two consecutive word tokens are 'bigrams'
+  
+```{r}
+tweet_bigrams <- tweets %>%
+  #get rid of retweets
+  filter(!str_detect(text, "^RT")) %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+tweet_bigrams
+```
+
+- Notice how bigrams overlap
+
+## Count of bigrams
+```{r}
+tweet_bigrams %>%
+  count(bigram, sort = T)
+my_stop_words <- tibble(word = c("http", "https"), lexicon = c("custom"))
+custom_stop_words <- bind_rows(my_stop_words, stop_words)
+
+bigrams_sep <- tweet_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") 
+bigrams_filtered <- bigrams_sep %>%
+  filter(!word1 %in% custom_stop_words$word,
+         !word1 %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word1, "[a-z]"), 
+         !word2 %in% custom_stop_words$word,
+         !word2 %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word2, "[a-z]"))
+bigram_counts <- bigrams_filtered %>%
+  count(word1, word2, sort = T)
+bigram_counts
+
+bigrams_sep %>%
+  filter(word1 == "not") %>%
+  count(word1,word2, sort = T)
+AFINN <- get_sentiments("afinn")
+not_words <- bigrams_sep %>%
+  filter(word1=="not") %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word2, value, sort = T)
+not_words
+not_words %>%
+  mutate(contribution = n*value) %>%
+  arrange(desc(abs(contribution))) %>%
+  head(20) %>%
+  mutate(word2 = reorder(word2, contribution)) %>%
+  ggplot(aes(word2, n*value, fill = n*value > 0)) +
+  geom_col(show.legend = F)+
+  xlab("Words preceded by \"not\"") +
+  ylab("Sentiment score * number of occurrences") +
+  coord_flip()
+negation_words <- c("not", "no", "never","without")
+negated_words <- bigrams_sep %>%
+  filter(word1 %in% negation_words) %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word1, word2, value, sort = T)
+```
+
+```{r}
+tweet_section_words <-  tweets %>%
+  #get rid of retweets
+  filter(!str_detect(text, "^RT")) %>%
+  mutate(text = str_remove_all(text, remove_reg)) %>%
+  select(screen_name, text, timestamp) %>%
+  group_by(screen_name) %>%
+  mutate(rank = rank(desc(timestamp)) )%>%
+  ungroup() %>%
+  unnest_tokens(word, text, token = "tweets") %>%
+  filter(!word %in% stop_words $ word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]"))
+word_pairs <- tweet_section_words %>%
+  pairwise_count(word, rank, sort= T )
+word_pairs
+word_pairs %>%
+  filter(item1 == "trump")
+word_cors <- tweet_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 100) %>%
+  pairwise_cor(word, rank, sort = T)
+word_cors
+
+set.seed(2016)
+
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+
