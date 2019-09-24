@@ -2,16 +2,26 @@
 title: "Text Analysis with R"
 author: "Becky Tang and Graham Tierney"
 date: "October 3, 2019"
-output:
-  beamer_presentation:
-    theme: "Madrid"
-    colortheme: "seahorse"
-    fonttheme: "structurebold"
+output: ioslides_presentation
 editor_options: 
   chunk_output_type: console
 ---
+```{css echo=FALSE}
+pre {
+  max-height: 300px;
+  float: center;
+  width: 800px;
+  overflow-y: auto;
+}
+
+pre.r {
+  max-height: none;
+}
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(class.source = "chunk-style")
 library(tidyverse)
 library(tidytext)
 library(stringr)
@@ -35,13 +45,15 @@ library(ggraph)
  
 
 ## What is text analysis?
+
 - As statisticians and data scientistis, why restrict ourselves to numeric data?
 - We can use text as data and employ statistical methods to derive patterns or trends 
   - Example: Given some song lyrics, can we determine who the singer is? What kinds of topics/sentiments does Lizzo like to sing about?
   
 ## Tidytext
+
 - So far in class, you have been employing tidy data principles, and we will continue to do so here!
-- Specifically, we will work in the 'tidy text format': a table with one \textbf{token} per row
+- Specifically, we will work in the 'tidy text format': a table with one token per row
 ```{r introduce_text}
 pp <- austen_books() %>%
   filter(book == "Pride & Prejudice") %>%
@@ -54,7 +66,8 @@ pp %>% slice(1:11)
 - How can we make this text into a format we can work with?
 
 ## Tokenizing
-- A \textbf{token} is a meanginful unit of text. For us, that will be a single word
+
+- A token is a meanginful unit of text. For us, that will be a single word
 - Tokenizing is simply splitting a body of text into tokens, which can achieved using the function `unnest_tokens()`
 
 ```{r unnest-token, echo = T}
@@ -75,8 +88,10 @@ tidy_pp
 # Twitter Data
 
 ## Democratic candidate tweets
+
 - Time to work with some fun data!
 - We have pulled tweets from four Democratic candidates: Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren
+
 ```{r}
 setwd("~/Documents/data_expedition2019/data")
 tweets <- read.csv("dem_cand_tweets.csv")
@@ -90,6 +105,7 @@ tweets %>%
 ```
 
 ## Tidy tweets
+
 ```{r}
 remove_reg <- "&amp;|&lt;|&gt;"
 tidy_tweets <- tweets %>%
@@ -101,6 +117,7 @@ head(tidy_tweets)
 ```
 
 ## Word counts
+
 - What are the most commonly tweeted words by these candidates?
 ```{r}
 tidy_tweets %>%
@@ -108,6 +125,7 @@ tidy_tweets %>%
 ```
 
 ## Stop words
+
 ```{r, echo = T}
 data("stop_words")
 head(stop_words)
@@ -123,6 +141,7 @@ tidy_tweets %>%
 ```
 
 ## Word frequency
+
 - While it's nice to get raw counts, but we may prefer to know which words are used more often \textit{relative} to other words. For this we can look towards word frequencies:
 
 ```{r frequency}
@@ -148,29 +167,9 @@ frequency %>%
   head()
 ```
 
-## Plot of word frequency
-- We can visualize the differences and similarities in word frequencies between two candidates: 
-```{r frequency-plot, warning=FALSE}
-# make into nice plot
-frequency <- frequency %>%
-  select(screen_name, word, freq) %>%
-  spread(screen_name, freq) %>%
-  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+# Sentiment analysis
 
-# choose 2 candidates
-ggplot(frequency, aes(JoeBiden, ewarren))+
-  # hide discreteness
-  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
-  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
-  scale_x_log10(labels = percent_format())+
-  scale_y_log10(labels = percent_format())+
-  geom_abline(color = "blue")
-```
-- Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
-- Words far away from the blue line are favored much more by one candidate than the other
-
-
-## Sentiment analysis
+## Sentiment lexicons
 
 - Now that we have looked at a per-word/token level, we may be interested in determining the general emotion of the text/author
 - We can consider a word to have a particular emotion attached to it
@@ -194,11 +193,13 @@ get_sentiments("bing")
 ```
 
 ## Important notes about sentiment lexicons
+
 - Not every English word is in a lexicon
 ```{r}
 get_sentiments("bing") %>%
   filter(word == "data")
 ```
+
 - These lexicons do not account for qualifiers before a word (ex. "not happy") because these lexicons are constructed for one-word tokens only
 - If we sum up each word's sentiment, it is possible for a piece of text to average out to a sentiment of zero/neutral
 
@@ -282,14 +283,17 @@ tidy_tweets %>%
 ```
 
 ## Wordcloud
-```{r wordcloud}
+
+```{r wordcloud, cache = T}
+par(mar = c(2,2,2,2))
 tidy_tweets %>%
   count(word) %>%
-  with(wordcloud(word, n, max.words = 70))
+  with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
 ```
 
 ## Sentiment wordcloud
-```{r sentiment-wordcloud}
+
+```{r sentiment-wordcloud, warning = F, cache = T}
 par(mar = c(2,2,2,2))
 tidy_tweets %>%
   filter(!word %in%custom_stop_words$word,
@@ -299,12 +303,106 @@ tidy_tweets %>%
   count(word, sentiment, sort = T) %>%
   # turn data frame into matrix
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
-  comparison.cloud(max.words = 70)
+  comparison.cloud(max.words = 50, scale=c(3,.5))
+```
+
+# Comparing candidates
+
+## Plot of word frequency
+- We can visualize the differences and similarities in word frequencies between two candidates: 
+```{r frequency-plot, warning=FALSE}
+# make into nice plot
+frequency <- frequency %>%
+  select(screen_name, word, freq) %>%
+  spread(screen_name, freq) %>%
+  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+
+# choose 2 candidates
+ggplot(frequency, aes(JoeBiden, ewarren))+
+  # hide discreteness
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
+  scale_x_log10(labels = percent_format())+
+  scale_y_log10(labels = percent_format())+
+  geom_abline(color = "blue")
+```
+
+- Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
+- Words far away from the blue line are favored much more by one candidate than the other
+
+
+## tf-idf
+
+- How to quantify what a document is about?
+  - Term frequency (tf): how often a word occurs
+    - Not always the best measurement due to common words like "the", "and", etc. List of stop words is not sustainable
+  - Inverse document frequency (idf): increases weight of rare words and decreases weight of common words in a document 
+     $$idf(\text{word}) = \ln \left(\dfrac{\text{number of documents}}{\text{number of documents containing word}} \right)$$
+- tf-idf is the prodct of tf and idf, and is intended to measure how important a word is relative to the document it came from
+
+## Term frequency by candidate
+- Consider all of the tweets from a given candidate as a document, and each candidate's document of tweets is part of a collection
+- Here we are plotting $n/\text{total}$ for each candidate, that is, the number of times a word is used by a candidate divided by the total number of words used by that candidate (term frequency)
+- The plots for the candidates look quite similar, with many words that are used rarely and few words that are used frequently
+
+
+```{r warning = F}
+candidate_words <- tweets %>%
+  #get rid of retweets
+  filter(!str_detect(text, "^RT")) %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(word, text, token = "tweets") %>%
+  count(screen_name, word, sort = T)
+
+total_words <- candidate_words %>%
+  group_by(screen_name) %>%
+  summarise(total = sum(n))
+candidate_words <- left_join(candidate_words, total_words, by = "screen_name")
+ggplot(candidate_words, aes(n/total, fill = screen_name))+
+  geom_histogram(show.legend=F)+
+  xlim(NA, 0.0009)+
+  facet_wrap(~screen_name, ncol = 2, scales = "free_y")
+```
+
+## Calculating tf_idf
+```{r tf-idf}
+candidate_words <- candidate_words %>%
+  bind_tf_idf(word, screen_name, n)
+candidate_words
+```
+
+- idf = 0 for the most common words, which implies that tf-idf = 0
+  - idf is very small for words that occur in many of the documents in a collection
+  
+## high tf-idf
+- Which terms have high tf-idf?
+
+```{r}
+candidate_words %>%
+  select(-total) %>%
+  arrange(desc(tf_idf))
+```
+
+- This should make sense, because some names and hashtags are characteristic to a particular document/candidate
+
+## Visualizing tf-idf
+```{r tf-idf-plot}
+candidate_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(screen_name) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  ggplot(aes(word, tf_idf, fill = screen_name))+
+  geom_col(show.legend =F) +
+  labs(x = NULL, y = "tf-idf") + 
+  facet_wrap(~screen_name, ncol= 2, scales= "free")+
+  coord_flip()
 ```
 
 ## Log-odds ratio
 - Looking beyond raw frequencies, we can now begin to investigate which candidate is more likely to use a given word in a tweet
-- To do so, we will utilize the \textbf{log-odds ratio}
+- To do so, we will utilize the log-odds ratio
 $$\text{OR}_{A:B} = \dfrac{\text{odds}_A}{\text{odds}_B} = \dfrac{\text{prob}(word)_A}{\text{prob}(word)_B}$$
 \begin{align*}
 \log \text{OR}_{A:B} = \log \left( \dfrac{\text{prob}(word)_A}{\text{prob}(word)_B}\right) &= \log \left( \dfrac{n_A / total_A}{n_B / total_B}\right) \\ 
@@ -349,30 +447,37 @@ word_ratios %>%
 
 - So Biden talks a lot about himself, whereas Warren talks more about political buzzwords
 
-## Moving beyond one-word tokens
+# Beyond one-word tokens
 
-- We do not have to constrain ourselves to one-word tokens. In fact, we can tokenize text into consecutive sequences of words called \textbf{n-grams}
+## n-grams
+- We can tokenize text into consecutive sequences of words called n-grams
   - Our usual one-word token is a `unigram'
   - Two consecutive word tokens are 'bigrams'
   
-```{r}
+```{r bigrams, eval = T, cache = T}
 tweet_bigrams <- tweets %>%
   #get rid of retweets
   filter(!str_detect(text, "^RT")) %>%
+  select(screen_name, text) %>%
   mutate(text = str_remove_all(text, remove_reg))%>%
   unnest_tokens(bigram, text, token = "ngrams", n = 2)
 tweet_bigrams
 ```
 
-- Notice how bigrams overlap
 
-## Count of bigrams
-```{r}
+## Counts of bigrams
+
+```{r bigram-counts, eval = T, echo = T}
 tweet_bigrams %>%
   count(bigram, sort = T)
 my_stop_words <- tibble(word = c("http", "https"), lexicon = c("custom"))
 custom_stop_words <- bind_rows(my_stop_words, stop_words)
+```
+ 
+ 
+--- 
 
+```{r}
 bigrams_sep <- tweet_bigrams %>%
   separate(bigram, c("word1", "word2"), sep = " ") 
 bigrams_filtered <- bigrams_sep %>%
@@ -385,34 +490,11 @@ bigrams_filtered <- bigrams_sep %>%
 bigram_counts <- bigrams_filtered %>%
   count(word1, word2, sort = T)
 bigram_counts
-
-bigrams_sep %>%
-  filter(word1 == "not") %>%
-  count(word1,word2, sort = T)
-AFINN <- get_sentiments("afinn")
-not_words <- bigrams_sep %>%
-  filter(word1=="not") %>%
-  inner_join(AFINN, by = c(word2 = "word")) %>%
-  count(word2, value, sort = T)
-not_words
-not_words %>%
-  mutate(contribution = n*value) %>%
-  arrange(desc(abs(contribution))) %>%
-  head(20) %>%
-  mutate(word2 = reorder(word2, contribution)) %>%
-  ggplot(aes(word2, n*value, fill = n*value > 0)) +
-  geom_col(show.legend = F)+
-  xlab("Words preceded by \"not\"") +
-  ylab("Sentiment score * number of occurrences") +
-  coord_flip()
-negation_words <- c("not", "no", "never","without")
-negated_words <- bigrams_sep %>%
-  filter(word1 %in% negation_words) %>%
-  inner_join(AFINN, by = c(word2 = "word")) %>%
-  count(word1, word2, value, sort = T)
 ```
 
-```{r}
+--- 
+
+```{r word-pairs, eval = T}
 tweet_section_words <-  tweets %>%
   #get rid of retweets
   filter(!str_detect(text, "^RT")) %>%
@@ -428,16 +510,21 @@ tweet_section_words <-  tweets %>%
 word_pairs <- tweet_section_words %>%
   pairwise_count(word, rank, sort= T )
 word_pairs
-word_pairs %>%
-  filter(item1 == "trump")
+
+```
+--- 
+```{r pairwise-cor}
 word_cors <- tweet_section_words %>%
   group_by(word) %>%
   filter(n() >= 100) %>%
   pairwise_cor(word, rank, sort = T)
 word_cors
+```
 
+## Graph of highly correlated words
+
+```{r corr-graph}
 set.seed(2016)
-
 word_cors %>%
   filter(correlation > .15) %>%
   graph_from_data_frame() %>%
@@ -447,5 +534,4 @@ word_cors %>%
   geom_node_text(aes(label = name), repel = TRUE) +
   theme_void()
 ```
-
 
