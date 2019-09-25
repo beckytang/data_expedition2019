@@ -20,7 +20,7 @@ pre.r {
 ```
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(echo = T)
 knitr::opts_chunk$set(class.source = "chunk-style")
 library(tidyverse)
 library(tidytext)
@@ -52,18 +52,20 @@ library(ggraph)
   
 ## Tidytext
 
-- So far in class, you have been employing tidy data principles, and we will continue to do so here!
+- Thus far in class you have been employing tidy data principles, and we will continue to do so here!
 - Specifically, we will work in the 'tidy text format': a table with one token per row
 ```{r introduce_text}
-pp <- austen_books() %>%
-  filter(book == "Pride & Prejudice") %>%
-  mutate(linenumber = row_number(),
-         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
-                                                 ignore_case = TRUE)))) %>%
-  select(-"book")
-pp %>% slice(1:11)
+text <- c("Thus far in class you have been employing tidy data principles, and we will continue to do so here!", 
+          "Specifically, we will work in the 'tidy text format': a table with one token per row")
+text
 ```
 - How can we make this text into a format we can work with?
+
+---
+```{r text-df}
+text_df <- tibble(line = 1:2, text = text)
+text_df
+```
 
 ## Tokenizing
 
@@ -71,9 +73,9 @@ pp %>% slice(1:11)
 - Tokenizing is simply splitting a body of text into tokens, which can achieved using the function `unnest_tokens()`
 
 ```{r unnest-token, echo = T}
-tidy_pp <- pp %>%
+tidy_text <- text_df %>%
   unnest_tokens(word, text)
-tidy_pp
+tidy_text
 ```
 
 ## Tokenizing cont.
@@ -92,13 +94,15 @@ tidy_pp
 - Time to work with some fun data!
 - We have pulled tweets from four Democratic candidates: Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren
 
-```{r}
+```{r echo = F}
 setwd("~/Documents/data_expedition2019/data")
 tweets <- read.csv("dem_cand_tweets.csv")
 #colnames(tweets)
 tweets <- tweets %>%
+  #get rid of retweets
+  filter(!str_detect(text, "^RT")) %>%
   mutate(timestamp = ymd_hms(created_at)) %>%
-  select("created_at", "screen_name", "text", "is_retweet", "retweet_count", "timestamp")
+  select("timestamp","screen_name", "text")
 tweets %>%
   select("screen_name", "text") %>%
   slice(1:2)
@@ -109,11 +113,9 @@ tweets %>%
 ```{r}
 remove_reg <- "&amp;|&lt;|&gt;"
 tidy_tweets <- tweets %>%
-  #get rid of retweets
-  filter(!str_detect(text, "^RT")) %>%
   mutate(text = str_remove_all(text, remove_reg))%>%
   unnest_tokens(word, text, token = "tweets")
-head(tidy_tweets)
+tidy_tweets %>% slice(1:5)
 ```
 
 ## Word counts
@@ -125,35 +127,45 @@ tidy_tweets %>%
 ```
 
 ## Stop words
+- Common/non-distinctive words
 
 ```{r, echo = T}
 data("stop_words")
 head(stop_words)
+```
+
+## Remove stop words
+
+```{r}
 tidy_tweets <- tidy_tweets %>%
   filter(!word %in% stop_words $ word,
          !word %in% str_remove_all(stop_words$word, "'"),
          str_detect(word, "[a-z]"))
 tidy_tweets %>%
   count(word, sort = T)
-tidy_tweets %>%
-  group_by(screen_name) %>%
-  count(word, sort = T)
 ```
 
 ## Word frequency
 
-- While it's nice to get raw counts, but we may prefer to know which words are used more often \textit{relative} to other words. For this we can look towards word frequencies:
+- While it's nice to get raw counts, we may prefer to know which words are used more often \textit{relative} to other words. For this we can look towards word frequencies:
 
 ```{r frequency}
 frequency_all <-  tidy_tweets %>%
   count(word, sort = T) %>%
   mutate(freq = n / n()) 
+```
 
-ggplot(frequency_all %>% top_n(15) %>%
+## Frequency plot
+
+```{r}
+ggplot(frequency_all %>% top_n(10, freq) %>%
          mutate(word = reorder(word, freq)), aes(x = word, y = freq))+
-  geom_col()+
-  coord_flip() 
+  geom_col()+ coord_flip() 
+```
 
+## Frequency by candidate
+
+```{r}
 frequency <- tidy_tweets %>%
   group_by(screen_name) %>%
   count(word, sort = T) %>%
@@ -162,9 +174,7 @@ frequency <- tidy_tweets %>%
               summarise(total = n()),
             by = "screen_name") %>%
   mutate(freq = n / total)
-
-frequency %>%
-  head()
+frequency %>% slice(1:4)
 ```
 
 # Sentiment analysis
@@ -204,7 +214,6 @@ get_sentiments("bing") %>%
 - If we sum up each word's sentiment, it is possible for a piece of text to average out to a sentiment of zero/neutral
 
 ## Sentiment of Elizabeth Warren's tweets: bing lexicon
-
 - We will use the bing lexicon to estimate the sentiment of Elizabeth Warren's tweets:
 
 ```{r}
@@ -243,7 +252,7 @@ bing_counts <- tidy_tweets %>%
 ```{r echo = F}
 bing_counts %>%
   group_by(sentiment) %>%
-  top_n(10) %>%
+  top_n(10, n) %>%
   ungroup() %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(x= word, y = n, fill = sentiment))+
@@ -252,6 +261,7 @@ bing_counts %>%
   labs(y = "Contribution to sentiment", x = NULL) + 
   coord_flip()
 ```
+
 
 ## Customize stop words
 
@@ -263,6 +273,8 @@ my_stop_words <- tibble(word = c("trump"), lexicon = c("custom"))
 custom_stop_words <- bind_rows(my_stop_words, stop_words)
 custom_stop_words
 ```
+
+##  Most common positive/negative words with custom stop words 
 
 ```{r echo = F}
 tidy_tweets %>%
@@ -283,26 +295,27 @@ tidy_tweets %>%
 ```
 
 ## Wordcloud
+-We can visualize the frequencies using a word cloud:
 
 ```{r wordcloud, cache = T}
-par(mar = c(2,2,2,2))
 tidy_tweets %>%
   count(word) %>%
   with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
 ```
 
 ## Sentiment wordcloud
-
-```{r sentiment-wordcloud, warning = F, cache = T}
-par(mar = c(2,2,2,2))
-tidy_tweets %>%
+```{r echo = F}
+custom_tidy_tweets <- tidy_tweets %>%
   filter(!word %in%custom_stop_words$word,
          !word %in% str_remove_all(custom_stop_words$word, "'"),
-         str_detect(word, "[a-z]")) %>%
+         str_detect(word, "[a-z]")) 
+```
+
+```{r sentiment-wordcloud, warning = F, cache = T}
+custom_tidy_tweets%>%
   inner_join(get_sentiments("bing"), by = "word") %>%
   count(word, sentiment, sort = T) %>%
-  # turn data frame into matrix
-  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%   # turn data frame into matrix
   comparison.cloud(max.words = 50, scale=c(3,.5))
 ```
 
@@ -310,7 +323,7 @@ tidy_tweets %>%
 
 ## Plot of word frequency
 - We can visualize the differences and similarities in word frequencies between two candidates: 
-```{r frequency-plot, warning=FALSE}
+```{r frequency-plot, warning=FALSE, eval = F}
 # make into nice plot
 frequency <- frequency %>%
   select(screen_name, word, freq) %>%
@@ -327,6 +340,22 @@ ggplot(frequency, aes(JoeBiden, ewarren))+
   geom_abline(color = "blue")
 ```
 
+## Word frequencies of Biden vs. Warren
+```{r echo = F, warning = F}
+frequency <- frequency %>%
+  select(screen_name, word, freq) %>%
+  spread(screen_name, freq) %>%
+  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+
+ggplot(frequency, aes(JoeBiden, ewarren))+
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
+  scale_x_log10(labels = percent_format())+
+  scale_y_log10(labels = percent_format())+
+  geom_abline(color = "blue")
+
+```
+
 - Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
 - Words far away from the blue line are favored much more by one candidate than the other
 
@@ -340,35 +369,30 @@ ggplot(frequency, aes(JoeBiden, ewarren))+
      $$idf(\text{word}) = \ln \left(\dfrac{\text{number of documents}}{\text{number of documents containing word}} \right)$$
 - tf-idf is the prodct of tf and idf, and is intended to measure how important a word is relative to the document it came from
 
-## Term frequency by candidate
+## Word frequency by candidate
 - Consider all of the tweets from a given candidate as a document, and each candidate's document of tweets is part of a collection
-- Here we are plotting $n/\text{total}$ for each candidate, that is, the number of times a word is used by a candidate divided by the total number of words used by that candidate (term frequency)
+- Here we are plotting term frequency $n/\text{total}$ for each candidate, that is, the number of times a word is used by a candidate divided by the total number of words used by that candidate
 - The plots for the candidates look quite similar, with many words that are used rarely and few words that are used frequently
 
 
-```{r warning = F}
-candidate_words <- tweets %>%
-  #get rid of retweets
-  filter(!str_detect(text, "^RT")) %>%
-  mutate(text = str_remove_all(text, remove_reg))%>%
-  unnest_tokens(word, text, token = "tweets") %>%
-  count(screen_name, word, sort = T)
-
-total_words <- candidate_words %>%
-  group_by(screen_name) %>%
-  summarise(total = sum(n))
-candidate_words <- left_join(candidate_words, total_words, by = "screen_name")
-ggplot(candidate_words, aes(n/total, fill = screen_name))+
+```{r cand-freq, warning = F}
+ggplot(frequency %>% 
+         gather(candidate, word), aes(x = word, fill = candidate))+
   geom_histogram(show.legend=F)+
-  xlim(NA, 0.0009)+
-  facet_wrap(~screen_name, ncol = 2, scales = "free_y")
+  xlim(NA, .009)+
+  xlab("term frequency")+
+  facet_wrap(~candidate, ncol = 2, scales = "free_y")
 ```
 
-## Calculating tf_idf
+## `bind_tf_idf()` function
+- The `bind_df_idf()` function takes a tidy text dataset as input and returns a dataframe with tf, idf, and tf-idf calculated
+
 ```{r tf-idf}
-candidate_words <- candidate_words %>%
+candidate_words <- tidy_tweets %>%
+  select(screen_name, word) %>%
+  count(screen_name, word, sort= T) %>%
   bind_tf_idf(word, screen_name, n)
-candidate_words
+candidate_words %>% slice(1:4)
 ```
 
 - idf = 0 for the most common words, which implies that tf-idf = 0
@@ -377,21 +401,22 @@ candidate_words
 ## high tf-idf
 - Which terms have high tf-idf?
 
-```{r}
+```{r high-tf-idf}
 candidate_words %>%
-  select(-total) %>%
   arrange(desc(tf_idf))
 ```
 
 - This should make sense, because some names and hashtags are characteristic to a particular document/candidate
 
 ## Visualizing tf-idf
-```{r tf-idf-plot}
+- Which terms have the highest tf-idf for the four candidates?
+
+```{r tf-idf-plot, echo = F}
 candidate_words %>%
   arrange(desc(tf_idf)) %>%
   mutate(word = factor(word, levels = rev(unique(word)))) %>%
   group_by(screen_name) %>%
-  top_n(10) %>%
+  top_n(10, tf_idf) %>%
   ungroup() %>%
   ggplot(aes(word, tf_idf, fill = screen_name))+
   geom_col(show.legend =F) +
@@ -400,39 +425,58 @@ candidate_words %>%
   coord_flip()
 ```
 
+## Probability of using a word
+- We have examined which words have high tf-idf, that is, which words are distinctive for a particular candidate
+- Now we can also explore questions such as: given a word, which candidate is more likely to use that word in a tweet?
+- We will utilize the log-odds ratio 
+
+## Odds ratio and log-odds ratio
+- Below, we define the odds ratio for Candidate A versus Candidate B
+$$\text{OR}_{A:B}(word) = \dfrac{\text{odds}_A}{\text{odds}_B} = \dfrac{\text{Prob(A uses word)}}{\text{Prob(B uses word)}}$$
+- The probability that Candidate A uses the word is the number of times A used the word, divided by the total number of words used by A: 
+$$\text{Prob(A uses word)} = \dfrac{n_A}{total_A}$$
+
 ## Log-odds ratio
-- Looking beyond raw frequencies, we can now begin to investigate which candidate is more likely to use a given word in a tweet
-- To do so, we will utilize the log-odds ratio
-$$\text{OR}_{A:B} = \dfrac{\text{odds}_A}{\text{odds}_B} = \dfrac{\text{prob}(word)_A}{\text{prob}(word)_B}$$
-\begin{align*}
-\log \text{OR}_{A:B} = \log \left( \dfrac{\text{prob}(word)_A}{\text{prob}(word)_B}\right) &= \log \left( \dfrac{n_A / total_A}{n_B / total_B}\right) \\ 
-& \approx \log \left( \dfrac{(n+1)_A / (total+1)_A}{(n+1)_B / (total+1)_B}\right)
-\end{align*}
+
+$$ \log \text{OR}_{A:B}(word)  = \log \left( \dfrac{n_A / total_A}{n_B / total_B}\right) $$
 
 - Equal odds corresponds to OR = 1, which corresponds to log(OR) = 0
+- If candidate A uses the word with higher probability, then log(OR) > 0
+- We use the following approximation in case a candidate does not use the word at all
+$$ \log \text{OR}_{A:B}(word) \approx \log \left( \dfrac{(n+1)_A / (total+1)_A}{(n+1)_B / (total+1)_B}\right)$$
+
 
 ## Word usage: equally likely
+-Here, we calculate log-odds ratios for Biden versus Warren and display them in ascending order of absolute value of log-odds ratio
 
-```{r word-usage-likely}
+```{r word-usage-likely, echo = F }
 candidates <- c("JoeBiden", "ewarren")
 word_ratios <- tidy_tweets %>%
   filter(screen_name %in% candidates) %>%
   filter(!str_detect(word, "^@")) %>%
   count(word, screen_name) %>%
   group_by(word) %>%
-  filter(sum(n) >= 10) %>%
+  filter(sum(n) >= 10) %>% # only consider more frequently uses words
   ungroup() %>%
   spread(screen_name, n, fill = 0) %>%
   mutate_if(is.numeric, list(~(. +1) / sum(.) + 1)) %>%
   mutate(logratio = log(eval(parse(text = candidates[1])) / eval(parse(text = candidates[2])))) %>%
+  select(word, logratio)%>%
   arrange(desc(logratio))
 word_ratios %>%
   arrange(abs(logratio))
 ```
 
-## Word usage: higher probability from one candidate than another
+- Words about equally likely to be tweeted from the two candidates are non-buzzwords
 
-```{r word-usage-diff}
+## Word usage: most distinctive 
+- The words that are most likely to be from Biden and not Warren will have the largest, most positive ratios
+- The words that are most likely to be from Warren and not Biden will have the smallest, most negative ratios
+- The plot on the next slides shows the 20 most positive and negative ratios
+
+## Word usage: most distinctive cont.
+
+```{r word-usage-diff, echo = F}
 word_ratios %>% 
   group_by(logratio < 0) %>%
   top_n(20, abs(logratio)) %>%
@@ -444,20 +488,18 @@ word_ratios %>%
   ylab(paste("log odds ratio", candidates[1], "/", candidates[2])) +
   scale_fill_discrete(name = "", labels = c(candidates[1], candidates[2]))
 ```
-
-- So Biden talks a lot about himself, whereas Warren talks more about political buzzwords
+- Here, the most distinctive words are much more personal or characteristic of the candidate's platform
+  - Biden talks a lot about himself, whereas Warren talks more about political buzzwords
 
 # Beyond one-word tokens
 
 ## n-grams
-- We can tokenize text into consecutive sequences of words called n-grams
-  - Our usual one-word token is a `unigram'
-  - Two consecutive word tokens are 'bigrams'
+- We can tokenize text into consecutive sequences of $n$ words called n-grams
+  - One-word token is a `unigram', two consecutive word tokens are 'bigrams', etc.
   
 ```{r bigrams, eval = T, cache = T}
 tweet_bigrams <- tweets %>%
-  #get rid of retweets
-  filter(!str_detect(text, "^RT")) %>%
+  filter(!str_detect(text, "^RT")) %>%   #get rid of retweets
   select(screen_name, text) %>%
   mutate(text = str_remove_all(text, remove_reg))%>%
   unnest_tokens(bigram, text, token = "ngrams", n = 2)
@@ -467,17 +509,16 @@ tweet_bigrams
 
 ## Counts of bigrams
 
-```{r bigram-counts, eval = T, echo = T}
+```{r bigram-counts}
 tweet_bigrams %>%
   count(bigram, sort = T)
-my_stop_words <- tibble(word = c("http", "https"), lexicon = c("custom"))
-custom_stop_words <- bind_rows(my_stop_words, stop_words)
 ```
  
- 
---- 
+## Make and filter to remove custom stop_words
+```{r http-stop-words}
+my_stop_words <- tibble(word = c("http", "https"), lexicon = c("custom"))
+custom_stop_words <- bind_rows(my_stop_words, stop_words)
 
-```{r}
 bigrams_sep <- tweet_bigrams %>%
   separate(bigram, c("word1", "word2"), sep = " ") 
 bigrams_filtered <- bigrams_sep %>%
@@ -487,33 +528,54 @@ bigrams_filtered <- bigrams_sep %>%
          !word2 %in% custom_stop_words$word,
          !word2 %in% str_remove_all(custom_stop_words$word, "'"),
          str_detect(word2, "[a-z]"))
+```
+
+```{r custom-bigram-counts, echo =F}
 bigram_counts <- bigrams_filtered %>%
   count(word1, word2, sort = T)
 bigram_counts
 ```
 
---- 
-
-```{r word-pairs, eval = T}
+## Words within a single tweet
+- We may be interested in which words tend to appear in a single tweet (not necessarily consecutive pairs)
+- For each candidate, we create a new variable called `rank` to indicate the order in which the tweets were published
+- Then we count the number of word pairs that occur within a single tweet
+```{r create-sections, eval = T, echo= F}
 tweet_section_words <-  tweets %>%
   #get rid of retweets
   filter(!str_detect(text, "^RT")) %>%
   mutate(text = str_remove_all(text, remove_reg)) %>%
   select(screen_name, text, timestamp) %>%
   group_by(screen_name) %>%
+  # create notion of section/single tweet
   mutate(rank = rank(desc(timestamp)) )%>%
   ungroup() %>%
   unnest_tokens(word, text, token = "tweets") %>%
   filter(!word %in% stop_words $ word,
          !word %in% str_remove_all(stop_words$word, "'"),
          str_detect(word, "[a-z]"))
+```
+
+```{r word-pairs}
 word_pairs <- tweet_section_words %>%
   pairwise_count(word, rank, sort= T )
 word_pairs
-
 ```
---- 
-```{r pairwise-cor}
+
+## Pairwise correlations
+- We see that "health" and "care" are the two mostcommon co-occurring words within a single tweet, followed by "country" and "people"
+- However, you may recall that those words are also most common indiviudal unigrams
+- Therefore, it may be more meaningful to measure how often pairs of words are used together relative to how often they are used individually
+- This is the correlation among words
+
+## Phi coefficient  
+- We will use the phi coefficient, which focuses on how much more likely it is that either both/neither of two words appear, versus only one of the two appearing
+- A correlation close to 0 means that the two words are not likely to co-occur, and a correlation close to 1 means that the two are both likely to occur or not occur
+- We will focus on the most common individual words
+
+## `pairwise_cor()` function
+
+```{r pairwise-cor-high}
 word_cors <- tweet_section_words %>%
   group_by(word) %>%
   filter(n() >= 100) %>%
@@ -521,10 +583,33 @@ word_cors <- tweet_section_words %>%
 word_cors
 ```
 
-## Graph of highly correlated words
+- Notice that "health" and "care" are highly correlated, but we do not see "people" and "country" here
 
-```{r corr-graph}
-set.seed(2016)
+## Pairiwse correlation cont.
+- When we looked at pairwise counts, "people" and "country" occurred frequently in a single tweet
+- But how correlated are they?
+```{r pairwise-cor-low}
+word_cors  %>%
+  filter(item1 == "people" & item2 == "country")
+```
+- So even though "people" and "country" co-occur very often within a single tweet, they are not very associated
+
+## Graph of highly correlated words
+- Lastly, we can visualize the correlations and clusters of highly-corelated word pairs
+```{r corr-graph-code, eval = F}
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+---
+
+```{r corr-graph, echo = F}
 word_cors %>%
   filter(correlation > .15) %>%
   graph_from_data_frame() %>%
