@@ -30,13 +30,8 @@ library(scales)
 library(textdata)
 library(wordcloud)
 library(reshape2)
-library(janeaustenr)
 library(lubridate)
-library(scales)
-library(purrr)
-library(broom)
 library(widyr)
-library(topicmodels)
 library(igraph)
 library(ggraph)
 ```
@@ -95,12 +90,9 @@ tidy_text
 - We have pulled tweets from four Democratic candidates: Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren
 
 ```{r echo = F}
-setwd("~/Documents/data_expedition2019/data")
-tweets <- read.csv("dem_cand_tweets.csv")
+tweets <- read.csv("data/dem_cand_tweets.csv")
 #colnames(tweets)
 tweets <- tweets %>%
-  #get rid of retweets
-  filter(!str_detect(text, "^RT")) %>%
   mutate(timestamp = ymd_hms(created_at)) %>%
   select("timestamp","screen_name", "text")
 tweets %>%
@@ -152,7 +144,7 @@ tidy_tweets %>%
 ```{r frequency}
 frequency_all <-  tidy_tweets %>%
   count(word, sort = T) %>%
-  mutate(freq = n / n()) 
+  mutate(freq = n / sum(n)) 
 ```
 
 ## Frequency plot
@@ -284,7 +276,7 @@ tidy_tweets %>%
   inner_join(get_sentiments("bing"), by = "word") %>%
   count(word, sentiment, sort = T) %>%
   group_by(sentiment) %>%
-  top_n(10) %>%
+  top_n(10, n) %>%
   ungroup() %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(x= word, y = n, fill = sentiment))+
@@ -366,7 +358,7 @@ ggplot(frequency, aes(JoeBiden, ewarren))+
   - Term frequency (tf): how often a word occurs
     - Not always the best measurement due to common words like "the", "and", etc. List of stop words is not sustainable
   - Inverse document frequency (idf): increases weight of rare words and decreases weight of common words in a document 
-     $$idf(\text{word}) = \ln \left(\dfrac{\text{number of documents}}{\text{number of documents containing word}} \right)$$
+     $$idf(\text{word}) = \log \left(\dfrac{\text{number of documents}}{\text{number of documents containing word}} \right)$$
 - tf-idf is the prodct of tf and idf, and is intended to measure how important a word is relative to the document it came from
 
 ## Word frequency by candidate
@@ -563,7 +555,7 @@ word_pairs
 ```
 
 ## Pairwise correlations
-- We see that "health" and "care" are the two mostcommon co-occurring words within a single tweet, followed by "country" and "people"
+- We see that "health" and "care" are the two most common co-occurring words within a single tweet, followed by "country" and "people"
 - However, you may recall that those words are also most common indiviudal unigrams
 - Therefore, it may be more meaningful to measure how often pairs of words are used together relative to how often they are used individually
 - This is the correlation among words
@@ -578,14 +570,14 @@ word_pairs
 ```{r pairwise-cor-high}
 word_cors <- tweet_section_words %>%
   group_by(word) %>%
-  filter(n() >= 100) %>%
+  filter(n() >= 75) %>%
   pairwise_cor(word, rank, sort = T)
 word_cors
 ```
 
 - Notice that "health" and "care" are highly correlated, but we do not see "people" and "country" here
 
-## Pairiwse correlation cont.
+## Pairwise correlation cont.
 - When we looked at pairwise counts, "people" and "country" occurred frequently in a single tweet
 - But how correlated are they?
 ```{r pairwise-cor-low}
