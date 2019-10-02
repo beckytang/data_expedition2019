@@ -168,7 +168,7 @@ word_ratios <- tidy_tweets %>%
   filter(sum(n) >= 10) %>% # only consider more frequently uses words
   ungroup() %>%
   spread(screen_name, n, fill = 0) %>%
-  mutate_if(is.numeric, list(~(. +1) / sum(.) + 1)) %>%
+  mutate_if(is.numeric, list(~(. +1) / (sum(.) + 1))) %>%
   mutate(logratio = log(eval(parse(text = cands[1]))/eval(parse(text = cands[2])))) %>%
   select(word, logratio)%>%
   arrange(desc(logratio))

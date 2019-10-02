@@ -196,6 +196,13 @@ get_sentiments("afinn")
 get_sentiments("bing") 
 ```
 
+## nrc
+
+- The nrc lexicon categorizes words into one of 10 categories: anger, anticipation, disgust, fear, joy, negative, positive, sadness, surprise, or trust. 
+```{r}
+get_sentiments("nrc") 
+```
+
 ## Important notes about sentiment lexicons
 
 - Not every English word is in a lexicon
@@ -385,7 +392,7 @@ $$idf(\text{word}) = \log \left(\dfrac{\text{number of documents}}{\text{number 
 
 - If every document contains the word, the fraction = 1, and so $idf = \log(1) = 0$. 
   - i.e. The word does not tell us much information about the document
-- tf-idf is the prodct of tf and idf, and is intended to measure how important a word is relative to the document it came from
+- tf-idf is the product of tf and idf, and is intended to measure how important a word is relative to the document it came from
 
 ## high tf-idf 
 - The `bind_tf_idf()` function takes a tidy text dataset as input and returns a dataframe with tf, idf, and tf-idf calculated
@@ -457,7 +464,7 @@ word_ratios <- tidy_tweets %>%
   filter(sum(n) >= 10) %>% # only consider more frequently uses words
   ungroup() %>%
   spread(screen_name, n, fill = 0) %>%
-  mutate_if(is.numeric, list(~(. +1) / sum(.) + 1)) %>%
+  mutate_if(is.numeric, list(~(. +1) / (sum(.) + 1))) %>%
   mutate(logratio = log(eval(parse(text = candidates[1])) / eval(parse(text = candidates[2])))) %>%
   select(word, logratio)%>%
   arrange(desc(logratio))
