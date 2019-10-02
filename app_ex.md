@@ -3,7 +3,8 @@ Text Analysis
 Your name here
 October 3, 2019
 
-# In class exercise
+In class exercise
+=================
 
 ### Load the data
 
@@ -17,13 +18,13 @@ tweets %>%
 ```
 
     ##             timestamp screen_name
-    ## 1 2019-07-24 15:29:45    JoeBiden
-    ## 2 2019-07-24 12:41:28    JoeBiden
-    ## 3 2019-07-23 23:23:10    JoeBiden
-    ##                                                                                                                                                                                                                                                                                            text
-    ## 1                                                                                                                                                                                  I'm about to take the stage at the @NAACP Presidential Candidates Forum. Watch live! https://t.co/7OrinSc8gy
-    ## 2                                                                                      Watch as our very own @SymoneDSanders breaks down @JoeBiden’s newly released plan to reform the criminal justice system.\n\nTo view the full plan, visit https://t.co/bZM4oiiKcg https://t.co/9tumtINB2I
-    ## 3 It’s about time we start rewarding workers with the resources to live with dignity &amp; respect—that begins with better wages and benefits, and the right to collectively organize and strike.\nToday, I stand with @unitehere airline catering workers as they rally together at DCA. #1Job
+    ## 1 2019-10-02 15:28:06    JoeBiden
+    ## 2 2019-10-02 02:34:51    JoeBiden
+    ## 3 2019-10-02 01:02:00    JoeBiden
+    ##                                                                                                                                                                                                                                                                         text
+    ## 1 .@DrBiden and I are sending our best wishes to @BernieSanders, Jane, and the whole Sanders family. Anyone who knows Bernie understands what a force he is. We are confident that he will have a full and speedy recovery and look forward to seeing him on the trail soon.
+    ## 2                                                                                                                                                                                              President Trump is morally unfit to lead our country. https://t.co/r3SKYqK26K
+    ## 3     President Trump asked a foreign government to interfere in our elections, and now he's spending $10 million on attack ads against me. It's clear that he is trying to influence the primary and pick his opponent.\n\nWhy? Because he knows I’ll beat him like a drum.
 
 ### Remove symbols and unnest into one-word tokens
 
@@ -32,21 +33,16 @@ remove_reg <- "&amp;|&lt;|&gt;"
 tidy_tweets <- tweets %>%
   mutate(text = str_remove_all(text, remove_reg))%>%
   unnest_tokens(word, text, token = "tweets")
-```
-
-    ## Using `to_lower = TRUE` with `token = 'tweets'` may not preserve URLs.
-
-``` r
 tidy_tweets %>%
   slice(1:5)
 ```
 
-    ##             timestamp screen_name  word
-    ## 1 2019-07-24 15:29:45    JoeBiden    im
-    ## 2 2019-07-24 15:29:45    JoeBiden about
-    ## 3 2019-07-24 15:29:45    JoeBiden    to
-    ## 4 2019-07-24 15:29:45    JoeBiden  take
-    ## 5 2019-07-24 15:29:45    JoeBiden   the
+    ##             timestamp screen_name    word
+    ## 1 2019-10-02 15:28:06    JoeBiden drbiden
+    ## 2 2019-10-02 15:28:06    JoeBiden     and
+    ## 3 2019-10-02 15:28:06    JoeBiden       i
+    ## 4 2019-10-02 15:28:06    JoeBiden     are
+    ## 5 2019-10-02 15:28:06    JoeBiden sending
 
 ``` r
 counts <- tidy_tweets %>%
@@ -58,16 +54,16 @@ counts %>%
     ## # A tibble: 10 x 2
     ##    word      n
     ##    <chr> <int>
-    ##  1 the    6091
-    ##  2 to     5745
-    ##  3 and    4119
-    ##  4 a      3150
-    ##  5 of     2785
-    ##  6 in     2693
-    ##  7 for    2338
-    ##  8 we     2187
-    ##  9 is     1860
-    ## 10 our    1772
+    ##  1 the    6213
+    ##  2 to     5955
+    ##  3 and    4145
+    ##  4 a      2918
+    ##  5 of     2794
+    ##  6 in     2616
+    ##  7 we     2421
+    ##  8 for    2418
+    ##  9 is     1841
+    ## 10 our    1840
 
 ``` r
 tidy_tweets <- tidy_tweets %>%
@@ -83,16 +79,16 @@ counts %>%
     ## # A tibble: 10 x 2
     ##    word          n
     ##    <chr>     <int>
-    ##  1 people      664
-    ##  2 president   518
-    ##  3 country     487
-    ##  4 fight       486
-    ##  5 care        434
-    ##  6 health      393
-    ##  7 time        370
-    ##  8 trump       366
-    ##  9 plan        357
-    ## 10 america     322
+    ##  1 people      683
+    ##  2 president   670
+    ##  3 trump       532
+    ##  4 fight       461
+    ##  5 care        457
+    ##  6 country     452
+    ##  7 health      446
+    ##  8 plan        387
+    ##  9 time        387
+    ## 10 change      312
 
 ``` r
 frequency_all <-  tidy_tweets %>%
@@ -105,7 +101,7 @@ ggplot(frequency_all %>% top_n(10, freq) %>%
   coord_flip() 
 ```
 
-![](app_ex_files/figure-gfm/word-freq-1.png)<!-- -->
+![](app_ex_files/figure-markdown_github/word-freq-1.png)
 
 ``` r
 ## frequencies by candidate
@@ -129,7 +125,7 @@ ggplot(frequency %>%
   coord_flip() 
 ```
 
-![](app_ex_files/figure-gfm/word-freq-2.png)<!-- -->
+![](app_ex_files/figure-markdown_github/word-freq-2.png)
 
 ### Sentiment analysis
 
@@ -146,7 +142,7 @@ tidy_tweets %>%
     ## # A tibble: 1 x 3
     ##   negative positive sentiment
     ##      <int>    <int>     <int>
-    ## 1     1174     1161       -13
+    ## 1     1118     1130        12
 
 ``` r
 bing_counts <- tidy_tweets %>%
@@ -164,7 +160,7 @@ bing_counts %>%
   coord_flip()
 ```
 
-![](app_ex_files/figure-gfm/bing-sentiment-1.png)<!-- -->
+![](app_ex_files/figure-markdown_github/bing-sentiment-1.png)
 
 ### Wordclouds
 
@@ -174,7 +170,7 @@ tidy_tweets %>%
   with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
 ```
 
-![](app_ex_files/figure-gfm/wordcloud-1.png)<!-- -->
+![](app_ex_files/figure-markdown_github/wordcloud-1.png)
 
 ### Comparing candidates: word frequency
 
@@ -192,11 +188,11 @@ ggplot(frequency, aes(JoeBiden, ewarren))+
   geom_abline(color = "blue")
 ```
 
-    ## Warning: Removed 12087 rows containing missing values (geom_point).
+    ## Warning: Removed 11769 rows containing missing values (geom_point).
 
-    ## Warning: Removed 12087 rows containing missing values (geom_text).
+    ## Warning: Removed 11769 rows containing missing values (geom_text).
 
-![](app_ex_files/figure-gfm/cand-freqs-1.png)<!-- -->
+![](app_ex_files/figure-markdown_github/cand-freqs-1.png)
 
 ### Comparing candidates: word probabilities
 
@@ -213,7 +209,7 @@ word_ratios <- tidy_tweets %>%
   filter(sum(n) >= 10) %>% # only consider more frequently uses words
   ungroup() %>%
   spread(screen_name, n, fill = 0) %>%
-  mutate_if(is.numeric, list(~(. +1) / sum(.) + 1)) %>%
+  mutate_if(is.numeric, list(~(. +1) / (sum(.) + 1))) %>%
   mutate(logratio = log(eval(parse(text = cands[1]))/eval(parse(text = cands[2])))) %>%
   select(word, logratio)%>%
   arrange(desc(logratio))
@@ -221,20 +217,20 @@ word_ratios <- tidy_tweets %>%
 word_ratios 
 ```
 
-    ## # A tibble: 636 x 2
+    ## # A tibble: 691 x 2
     ##    word      logratio
     ##    <chr>        <dbl>
-    ##  1 biden      0.0173 
-    ##  2 vp         0.0141 
-    ##  3 america    0.0101 
-    ##  4 president  0.00906
-    ##  5 joe        0.00765
-    ##  6 vote       0.00733
-    ##  7 nation     0.00719
-    ##  8 join       0.00638
-    ##  9 day        0.00606
-    ## 10 #teamjoe   0.00524
-    ## # … with 626 more rows
+    ##  1 biden         4.38
+    ##  2 #teamjoe      3.82
+    ##  3 obamacare     3.49
+    ##  4 rsvp          3.49
+    ##  5 folks         3.32
+    ##  6 soul          3.32
+    ##  7 vision        3.18
+    ##  8 de            3.06
+    ##  9 code          3.02
+    ## 10 educators     3.02
+    ## # … with 681 more rows
 
 ``` r
 word_ratios %>% 
@@ -249,7 +245,7 @@ word_ratios %>%
   scale_fill_discrete(name = "", labels = c(cands[1], cands[2]))
 ```
 
-![](app_ex_files/figure-gfm/word-usage-diff-1.png)<!-- -->
+![](app_ex_files/figure-markdown_github/word-usage-diff-1.png)
 
 ### n-grams
 
@@ -281,67 +277,51 @@ bigram_counts <- bigrams_filtered %>%
 bigram_counts 
 ```
 
-    ## # A tibble: 21,717 x 3
-    ##    word1    word2        n
-    ##    <chr>    <chr>    <int>
-    ##  1 health   care       276
-    ##  2 middle   class      111
-    ##  3 it’s     time       100
-    ##  4 climate  change      99
-    ##  5 donald   trump       98
-    ##  6 gun      violence    90
-    ##  7 vp       biden       81
-    ##  8 wall     street      70
-    ##  9 white    house       68
-    ## 10 american people      65
-    ## # … with 21,707 more rows
+    ## # A tibble: 21,107 x 3
+    ##    word1      word2        n
+    ##    <chr>      <chr>    <int>
+    ##  1 health     care       319
+    ##  2 donald     trump      170
+    ##  3 gun        violence   147
+    ##  4 climate    change     144
+    ##  5 middle     class      104
+    ##  6 it’s       time        97
+    ##  7 white      house       94
+    ##  8 climate    crisis      75
+    ##  9 structural change      75
+    ## 10 fossil     fuel        73
+    ## # … with 21,097 more rows
 
-# On your own
+On your own
+===========
 
 ``` r
 sou <- sou %>%
   mutate(Text = as.character(Text))
 ```
 
-1.  Finish the code below to create a tidytext dataframe called
-    `sou_tidy`.
-
-<!-- end list -->
+1.  Finish the code below to create a tidytext dataframe called `sou_tidy`.
 
 ``` r
-sou_tidy <- sou %>%
-  unnest_tokens(output = word, input = Text)
-
 # sou_tidy <- sou %>%
 #   unnest_tokens(output = word, input = ?)
 ```
 
-Before we start calculating word counts or frequencies, let’s go ahead
-and remove the annoying stop words. With the Twitter data, we had to do
-a little extra work to remove the stop words due to the format of
-tweets. With regular text, we can use the simple `anti_join()` function
-to remove the stop words from the tidytext:
+Before we start calculating word counts or frequencies, let's go ahead and remove the annoying stop words. With the Twitter data, we had to do a little extra work to remove the stop words due to the format of tweets. With regular text, we can use the simple `anti_join()` function to remove the stop words from the tidytext: **The code below will not run until you finish the above sections. When you do, change eval=F to eval=T and execute it.**
 
 ``` r
 sou_tidy <- sou_tidy %>%
   anti_join(stop_words, by = "word")
 ```
 
-2.  What are the five words that are used most frequently across the two
-    presidents?
-
-<!-- end list -->
+1.  What are the five words that are used most frequently across the two presidents?
 
 ``` r
 # sou_tidy %>%
 #   count(word, sort = T)
 ```
 
-3.  Interestingly, the word “applause” is used a lot in the State of the
-    Union addresses. That is quite odd, but there is a reason for it\!
-    Run the following code and explain why that is:
-
-<!-- end list -->
+1.  Interestingly, the word "applause" is used a lot in the State of the Union addresses. That is quite odd, but there is a reason for it! Run the following code and explain why that is:
 
 ``` r
 sou %>%
@@ -357,37 +337,7 @@ sou %>%
     ## 4 We should follow the example of a North Miami woman named Desiline Victor. When Desiline arrived at her polling place, she was told the wait to vote might be 6 hours. And as time ticked by, her concern was not with her tired body or aching feet, but whether folks like her would get to have their say. And hour after hour, a throng of people stayed in line to support her, because Desiline is 102 years old. And they erupted in cheers when she finally put on a sticker that read, "I voted." [Applause] There's Desiline.
     ## 5                              As usual, our First Lady sets a good example. [Applause] Well—[applause]. Michelle's "Let's Move!" partnership with schools, businesses, local leaders has helped bring down childhood obesity rates for the first time in 30 years. And that's an achievement that will improve lives and reduce health care costs for decades to come. The Joining Forces alliance that Michelle and Jill Biden launched has already encouraged employers to hire or train nearly 400,000 veterans and military spouses.
 
-4.  So we should remove the word “applause” from our tidytext. For
-    similar reasons, we should remove the word “laughter”. Create a
-    custom list of stop words, and use it to create a new `sou_tidy`
-    tidytext. Finally, display the ten most used words across the two
-    presidents.
-
-<!-- end list -->
-
-``` r
-my_stop_words <- tibble(word = c("applause", "laughter"), lexicon = "custom")
-custom_stop_words <- bind_rows(my_stop_words, stop_words)
-sou_tidy <- sou_tidy %>%
-  anti_join(custom_stop_words, by = "word")
-sou_tidy %>%
-  count(word, sort = T) %>%
-  slice(1:10)
-```
-
-    ## # A tibble: 10 x 2
-    ##    word          n
-    ##    <chr>     <int>
-    ##  1 america     187
-    ##  2 american    180
-    ##  3 people      148
-    ##  4 americans   129
-    ##  5 country     114
-    ##  6 jobs        108
-    ##  7 tonight     106
-    ##  8 time        104
-    ##  9 world       102
-    ## 10 congress     90
+1.  So we should remove the word "applause" from our tidytext. For similar reasons, we should remove the word "laughter". Create a custom list of stop words, and use it to create a new `sou_tidy` tidytext. Finally, display the ten most used words across the two presidents.
 
 ``` r
 # my_stop_words <- tibble(word = c(?, ?), lexicon = "custom")
@@ -395,8 +345,7 @@ sou_tidy %>%
 # sou_tidy <- ?
 ```
 
-The following code calculates the word frequencies of Obama vs the word
-frequencies of Trump in their State of the Union addresses.
+The following code calculates the word frequencies of Obama vs the word frequencies of Trump in their State of the Union addresses. **The code below will not run until you finish the above sections. When you do, change eval=F to eval=T and execute it.**
 
 ``` r
 pres_frequency <- sou_tidy %>%
@@ -411,94 +360,12 @@ pres_frequency %>%
   slice(1:5)
 ```
 
-    ## # A tibble: 10 x 5
-    ## # Groups:   President [2]
-    ##    President word          n total    freq
-    ##    <fct>     <chr>     <int> <int>   <dbl>
-    ##  1 Obama     america     120 10205 0.0118 
-    ##  2 Obama     people       91 10205 0.00892
-    ##  3 Obama     jobs         83 10205 0.00813
-    ##  4 Obama     american     81 10205 0.00794
-    ##  5 Obama     americans    72 10205 0.00706
-    ##  6 Trump     american     99  6734 0.0147 
-    ##  7 Trump     america      67  6734 0.00995
-    ##  8 Trump     americans    57  6734 0.00846
-    ##  9 Trump     people       57  6734 0.00846
-    ## 10 Trump     country      56  6734 0.00832
+1.  Using `pres_frequency`, create a plot of the top 20 most frequently used terms of Obama, and another plot of the top 20 most frequently used terms of Trump. Comment on the similarities/differences.
 
-5.  Using `pres_frequency`, create a plot of the top 20 most frequently
-    used terms of Obama, and another plot of the top 20 most frequently
-    used terms of Trump. Comment on the similarities/differences.
+2.  Using the `bing` lexicon, analyze the sentiment of the State of the Unions across the two presidents. Looking at all the addresses, what is the most commonly used negative word, and what is the most commonly used positive word?
 
-<!-- end list -->
+3.  Calculate the overall sentiment of Obama's addresses, and also calculate the overall sentiment of Trump's addresses. Which president is more positive/negative in sentiment? (Hint: use code similar to the Twitter data, but consider using the `group_by()` function instead of `filter()`.)
 
-``` r
-# ggplot(pres_frequency %>% 
-#          filter(President == "Obama") %>% 
-#          top_n(20, freq) %>%
-#          mutate(word = reorder(word, freq)),
-#        aes(x = word, y = freq))+
-#   geom_col()+ 
-#   coord_flip() 
-# 
-# ggplot(pres_frequency %>% 
-#          filter(President == "Trump") %>% 
-#          top_n(20, freq) %>%
-#          mutate(word = reorder(word, freq)),
-#        aes(x = word, y = freq))+
-#   geom_col()+ 
-#   coord_flip() 
-```
+4.  Make a word cloud for the top 50 words used in all the State of the Union addresses. (Note, the first time you knit this, it may take awhile.)
 
-6.  Using the `bing` lexicon, analyze the sentiment of the State of the
-    Unions across the two presidents. Looking at all the addresses, what
-    is the most commonly used negative word, and what is the most
-    commonly used positive word?
-
-<!-- end list -->
-
-``` r
-sou_tidy %>%
-  inner_join(get_sentiments("bing"), by = "word") %>%
-  count(word, sentiment, sort = T) %>%
-  group_by(sentiment) %>%
-  summarize(max = max(n))
-```
-
-    ## # A tibble: 2 x 2
-    ##   sentiment   max
-    ##   <chr>     <int>
-    ## 1 negative     53
-    ## 2 positive     41
-
-7.  Calculate the overall sentiment of Obama’s addresses, and also
-    calculate the overall sentiment of Trump’s addresses. Which
-    president is more positive/negative in sentiment? (Hint: use code
-    similar to the Twitter data, but consider using the `group_by()`
-    function instead of `filter()`.)
-
-<!-- end list -->
-
-``` r
-# sou_tidy %>%
-#   group_by(President) %>%
-#   inner_join(get_sentiments("bing"), by = "word") %>%
-#   count(sentiment) %>%
-#   spread(sentiment, n) %>%
-#   mutate(sentiment = positive - negative)
-```
-
-8.  Make a word cloud for the top 50 words used in all the State of the
-    Union addresses. (Note, the first time you knit this, it may take
-    awhile.)
-
-<!-- end list -->
-
-``` r
-# sou_tidy %>%
-#   count(word) %>%
-#   with(wordcloud(word, n, max.words = 75,scale=c(3,.5)))
-```
-
-9.  Lastly, we would appreciate any feedback you may have for us\!
-    Positive or negative, we welcome it all\!
+5.  Lastly, we would appreciate any feedback you may have for us! Positive or negative, we welcome it all!

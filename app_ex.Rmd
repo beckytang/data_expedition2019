@@ -226,24 +226,21 @@ sou <- sou %>%
   mutate(Text = as.character(Text))
 ```
 
-1. Finish the code below to create a tidytext dataframe called `sou_tidy`.
+1) Finish the code below to create a tidytext dataframe called `sou_tidy`.
 
 ```{r sou-tidy}
-sou_tidy <- sou %>%
-  unnest_tokens(output = word, input = Text)
-
 # sou_tidy <- sou %>%
 #   unnest_tokens(output = word, input = ?)
 ```
 
-Before we start calculating word counts or frequencies, let's go ahead and remove the annoying stop words. With the Twitter data, we had to do a little extra work to remove the stop words due to the format of tweets. With regular text, we can use the simple `anti_join()` function to remove the stop words from the tidytext:
+Before we start calculating word counts or frequencies, let's go ahead and remove the annoying stop words. With the Twitter data, we had to do a little extra work to remove the stop words due to the format of tweets. With regular text, we can use the simple `anti_join()` function to remove the stop words from the tidytext: **The code below will not run until you finish the above sections. When you do, change eval=F to eval=T and execute it.**
 
-```{r}
+```{r, eval=F}
 sou_tidy <- sou_tidy %>%
   anti_join(stop_words, by = "word")
 ```
 
-2. What are the five words that are used most frequently across the two presidents? 
+2) What are the five words that are used most frequently across the two presidents? 
 
 ```{r}
 # sou_tidy %>%
@@ -262,21 +259,14 @@ sou %>%
 4. So we should remove the word "applause" from our tidytext. For similar reasons, we should remove the word "laughter". Create a custom list of stop words, and use it to create a new `sou_tidy` tidytext. Finally, display the ten most used words across the two presidents.
 
 ```{r}
-my_stop_words <- tibble(word = c("applause", "laughter"), lexicon = "custom")
-custom_stop_words <- bind_rows(my_stop_words, stop_words)
-sou_tidy <- sou_tidy %>%
-  anti_join(custom_stop_words, by = "word")
-sou_tidy %>%
-  count(word, sort = T) %>%
-  slice(1:10)
 # my_stop_words <- tibble(word = c(?, ?), lexicon = "custom")
 # custom_stop_words <- bind_rows(my_stop_words, stop_words)
 # sou_tidy <- ?
 ```
 
-The following code calculates the word frequencies of Obama vs the word frequencies of Trump in their State of the Union addresses.
+The following code calculates the word frequencies of Obama vs the word frequencies of Trump in their State of the Union addresses. **The code below will not run until you finish the above sections. When you do, change eval=F to eval=T and execute it.**
 
-```{r}
+```{r, eval=F}
 pres_frequency <- sou_tidy %>%
   group_by(President) %>%
   count(word, sort = T) %>%
@@ -292,51 +282,26 @@ pres_frequency %>%
 5. Using `pres_frequency`, create a plot of the top 20 most frequently used terms of Obama, and another plot of the top 20 most frequently used terms of Trump. Comment on the similarities/differences.
 
 ```{r}
-# ggplot(pres_frequency %>% 
-#          filter(President == "Obama") %>% 
-#          top_n(20, freq) %>%
-#          mutate(word = reorder(word, freq)),
-#        aes(x = word, y = freq))+
-#   geom_col()+ 
-#   coord_flip() 
-# 
-# ggplot(pres_frequency %>% 
-#          filter(President == "Trump") %>% 
-#          top_n(20, freq) %>%
-#          mutate(word = reorder(word, freq)),
-#        aes(x = word, y = freq))+
-#   geom_col()+ 
-#   coord_flip() 
+
 ```
 
 6. Using the `bing` lexicon, analyze the sentiment of the State of the Unions across the two presidents. Looking at all the addresses, what is the most commonly used negative word, and what is the most commonly used positive word?
 
 ```{r}
-sou_tidy %>%
-  inner_join(get_sentiments("bing"), by = "word") %>%
-  count(word, sentiment, sort = T) %>%
-  group_by(sentiment) %>%
-  summarize(max = max(n))
+
 ```
 
 7. Calculate the overall sentiment of Obama's addresses, and also calculate the overall sentiment of Trump's addresses. Which president is more positive/negative in sentiment? (Hint: use code similar to the Twitter data, but consider using the `group_by()` function instead of `filter()`.) 
 
 ```{r}
-# sou_tidy %>%
-#   group_by(President) %>%
-#   inner_join(get_sentiments("bing"), by = "word") %>%
-#   count(sentiment) %>%
-#   spread(sentiment, n) %>%
-#   mutate(sentiment = positive - negative)
+
 ```
 
 
 8. Make a word cloud for the top 50 words used in all the State of the Union addresses. (Note, the first time you knit this, it may take awhile.)
 
 ```{r cache = T}
-# sou_tidy %>%
-#   count(word) %>%
-#   with(wordcloud(word, n, max.words = 75,scale=c(3,.5)))
+
 ```
 
 9. Lastly, we would appreciate any feedback you may have for us! Positive or negative, we welcome it all!
