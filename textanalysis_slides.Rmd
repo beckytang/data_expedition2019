@@ -90,7 +90,7 @@ tidy_text
 - We have pulled tweets from four Democratic candidates: Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren
 
 ```{r echo = F}
-tweets <- read.csv("data/dem_cand_tweets.csv")
+tweets <- read.csv("data/dem_cand_tweets_2019_10_02.csv")
 #colnames(tweets)
 tweets <- tweets %>%
   filter(!str_detect(text, "^RT")) %>%   #get rid of retweets
@@ -150,7 +150,7 @@ frequency_all <-  tidy_tweets %>%
 
 ## Frequency plot
 
-```{r}
+```{r freq-plot, fig.height=3}
 ggplot(frequency_all %>% top_n(10, freq) %>%
          mutate(word = reorder(word, freq)), aes(x = word, y = freq))+
   geom_col()+ 

@@ -19,7 +19,7 @@ library(lubridate)
 library(widyr)
 library(igraph)
 library(ggraph)
-tweets <- read.csv("data/dem_cand_tweets.csv")
+tweets <- read.csv("data/dem_cand_tweets_2019_10_02.csv")
 sou <- read.csv("data/sou.csv", header = T)  
 data("stop_words")
 ```
