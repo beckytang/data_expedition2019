@@ -199,7 +199,7 @@ get_sentiments("bing")
 ## nrc
 
 - The nrc lexicon categorizes words into one of 10 categories: anger, anticipation, disgust, fear, joy, negative, positive, sadness, surprise, or trust. 
-```{r}
+```{r, cache = T}
 get_sentiments("nrc") 
 ```
 
