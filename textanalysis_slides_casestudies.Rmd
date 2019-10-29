@@ -675,25 +675,26 @@ sou_data_dfm <-
   dfm(sou_data$text,
       remove = c(stop_words$word,"laughter","applause"),
       remove_punct = T)
-sou_data_dfm@docvars <- sou_data %>% select(-text) %>% as.data.frame()
 sou_data_dfm
 
 object.size(sou_data_dfm) %>% format(units = "Mb")
 convert(sou_data_dfm,to = "matrix") %>% 
   object.size() %>% format(units = "Mb")
+
+sou_data_dfm@docvars <- sou_data %>% select(-text) %>% as.data.frame()
 ```
 
 ## Logistic regression
 
 - The classification task we will focus on is recovering party from the paragraphs of a speech. 
-- We have `r nrow(sou_data_dfm)` documents but `r ncol(sou_data_dfm)` unique words! Logistic regression can only work with $p < n$. 
+- We have `r nrow(sou_data_dfm)` documents but `r ncol(sou_data_dfm)` unique words! Logistic regression can only work with fewer features than observations ($p < n$). 
 - Need some way to reduce the dimensions 
 
 ## Logistic regression - sentiment analysis
 
-One way we discussed before is mapping each word to a "sentiment". We can reduce the columns of the dfm to counts of the sentiment words of each type. 
+One way we discussed before is mapping each word to a "sentiment". We can reduce the columns of the dfm to counts of the sentiment words of each type. For each row (paragraph), sum all the counts of words for each sentiment. The output is a count matrix with the $ij$ entry showing the number of words in paragraph $i$ with sentiment $j$. 
 
-```{r dfm_to_dsm,cache=T}
+```{r dfm_to_dsm,cache=T,echo=F}
 sou_data_dfm <- 
   sou_data_dfm %>% 
   dfm_trim(min_termfreq = 3)
@@ -712,6 +713,8 @@ sou_sentiment_dfm_std <- sou_sentiment_dfm %>%
   mutate(n = rowSums(sou_sentiment_dfm)) %>% 
   mutate(party = sou_data$Party,
          no_sentiment_words = as.numeric(n == 0))
+
+sou_sentiment_dfm_std[1:5,1:5]
 ```
 
 
@@ -802,6 +805,12 @@ Given a piece of text with unknown authorship, we can compute the posterior-pred
 
 ## Generative Models - Classification
 
+What we are interested in is $P(\text{Dem}|W_{new},W_d,W_r)$, where $W_{new}$ is the new document, and $W_d$ and $W_r$ are word counts from documents authored by Democrats and Republicans.
+
+From Bayes rule, we know $P(\text{Dem}|W_{new},W_d,W_r) \propto P(W_{new}|\text{Dem},W_d,W_r)P(\text{Dem})$. The prior $P(\text{Dem})$ is easy, we choose it ourselves. But how do we compute the other term? 
+
+## Generative Models - Classification
+
 Let $W_d$ be the word counts for Democratic speeches and $W_r$ be the word counts for Republican speeches. $W_{new}$ is the word count vector of the new document. $n_{new}$, $n_d$, and $n_r$ are the number of new, Democratic, and Republican words. 
 
 \[
@@ -817,7 +826,7 @@ $P(W_{new}|\text{Dem},\theta_d)$ is a multinomial likelihood, and the posterior 
 
 ## Generative Models - Classification
 
-A Dirichlet-Multinomial distribution is the result of $n$ independent, descrete-outcomed trials (same as in the multinomial) except the success probability is drawn from a Dirichlet distribution with specified parameters. This is the same form as the posterior-predictive for our example. Thus, 
+A Dirichlet-Multinomial distribution is the result of $n$ independent, discrete-outcomed trials (same as in the multinomial) except the success probability is drawn from a Dirichlet distribution with specified parameters. This is the same form as the posterior-predictive for our example. Thus, 
 
 \[p_D \propto \text{Dir-Multi}(W_{new}|W_d + \alpha)\]
 \[p_R \propto \text{Dir-Multi}(W_{new}|W_r + \alpha)\]
@@ -878,27 +887,43 @@ table(truth = sou_dfm_by_speech@docvars$Party,
 
 The previous method is useful for labeled data and classification. But the classification does not tell you what the text is about and not all data have meaningful labels. Topic models generally do unsupervised clustering of documents. 
 
-## Topic Models - LDA
+## Topic Models - Motivation
 
-LDA, the Latent Dirichlet Allocation, is the most common topic model. In LDA, each word $i$ in  document $d$, $W_{di}$, is associated with a topic $Z_{di}$. The topic distribution for topic $t$, $\beta_t$, is a distribution over all possible words. If a word is drawn from topic $t$, $\beta_{t}$ gives the probability of drawing each word. Each document is a unique mixture over topics. For document $d$, the probability of drawing each topic is given by $\theta_d$. Independent Dirichlet($\phi$) priors are placed on each $\beta_t$ and Dirichlet($\alpha$) priors on $\theta_d$. 
+The results of LDA applied to the State of the Union speeches are shown below. We identified 5 themes/topics. The 10 most common words in each topic are shown below. 
 
-## Topic Models - LDA
-
-To generate a corpus of documents of pre-determined size: 
-
-1. For each topic $t$, draw $\beta_t \sim \text{Dir}(\phi)$. 
-2. For each document $d$, draw $\theta_d \sim \text{Dir}(\alpha)$.
-  a. For each word $i$ in document $d$, draw $Z_{di} \sim \text{Cat}(\theta_d)$
-  b. For each word $i$ in document $d$, draw $W_{di} \sim \text{Cat}(\beta_{Z_{id}})$
-
-## Topic Models - LDA
-
-```{r lda_results}
+```{r lda_results,echo=F}
 lda_speech <- sou_dfm_by_speech %>% 
-  dfm_remove("america",valuetype = "regex") %>% 
-  topicmodels::LDA(k=10)
-topicmodels::terms(lda_speech,5)
+  dfm_remove("america|people|congress|tonight|govern|time",valuetype = "regex") %>% 
+  {.[ntoken(.)>0,]} %>% 
+  topicmodels::LDA(k=5,control = list(seed = 0901))
 ```
+
+```{r top_words}
+topicmodels::terms(lda_speech,10)
+```
+
+## Topic Models - Motivation
+
+The proportion of times each president spoke about each toipc is shown below
+
+```{r pres_dists,echo=F}
+topicmodels::posterior(lda_speech)$topics %>% round(2) %>% cbind(sou_dfm_by_speech@docvars %>% select(pres,year)) %>% 
+  group_by(pres) %>% 
+  mutate(year = min(as.numeric(year))) %>% 
+  summarise_all(mean) %>% 
+  arrange(year) %>% 
+  select(-year) %>% 
+  rename_if(is.numeric,function(t) str_c("Topic ",t)) %>% 
+  mutate_if(is.numeric,function(v) round(v,2)) 
+```
+
+## Topic Models - LDA
+
+LDA, the Latent Dirichlet Allocation, is the most common topic model. In LDA, each document is modeled as a mixture of $K$ substantive topics. $\theta_d$ gives the proportion of words in document $d$ about each topic, i.e. if $\theta_{d} = <.25,.50,.25>$, then one quarter of the words are from topic 1, one half from topic 2, and one quarter from topic 3. 
+
+A topic is a probability distribution over words. Given that a word is from topic $k$, the probability of drawing a specific word $w$ is given by $\beta_{kw}$. Each topic gives a different probability for drawing that same word $w$. 
+
+Independent Dir($\phi$) priors are placed on each $\beta_k$ and Dir($\alpha$) priors on $\theta_d$. 
 
 # Questions?
 
