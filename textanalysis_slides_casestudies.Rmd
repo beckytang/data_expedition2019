@@ -1,0 +1,904 @@
+---
+title: "Text Analysis with R"
+author: "Becky Tang and Graham Tierney"
+date: "November 7, 2019"
+output: ioslides_presentation
+editor_options: 
+  chunk_output_type: console
+---
+```{css echo=FALSE}
+pre {
+  max-height: 300px;
+  float: center;
+  width: 800px;
+  overflow-y: auto;
+}
+
+pre.r {
+  max-height: none;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,cache = T)
+knitr::opts_chunk$set(class.source = "chunk-style")
+library(tidyverse)
+library(tidytext)
+library(stringr)
+library(tidyr)
+library(scales)
+library(textdata)
+library(wordcloud)
+library(reshape2)
+library(lubridate)
+library(widyr)
+library(igraph)
+library(ggraph)
+library(quanteda)
+```
+
+# Introduction 
+ 
+
+## What is text analysis?
+
+- As statisticians and data scientistis, why restrict ourselves to numeric data?
+- We can use text as data and employ statistical methods to derive patterns or trends 
+  - Example: Given some song lyrics, can we determine who the singer is? What kinds of topics/sentiments does Lizzo like to sing about?
+  
+## Tidytext
+
+- We typically think of text as a (very) long string, but this format is quite hard to work with. 
+- Thus, we will work in the 'tidy text format': a table with one token per row and a document id
+```{r introduce_text}
+text <- c("We typically think of text as a (very) long string, but this format is quite hard to work with.", 
+          "Specifically, we will work in the 'tidy text format': a table with one token per row")
+text
+```
+
+---
+```{r text-df}
+text_df <- tibble(line = 1:2, text = text)
+text_df
+```
+
+## Tokenizing
+
+- A token is a meaningful unit of text. For us, that will be a single word
+- Tokenizing is simply splitting a body of text into tokens, which can achieved using the function `unnest_tokens()`
+
+```{r unnest-token, echo = T}
+tidy_text <- text_df %>%
+  unnest_tokens(word, text)
+tidy_text
+```
+
+## Tokenizing cont.
+- With the `unnest_tokens()` function, we can easily format any body of text into a user-friendly data frame
+- First argument: name of column/variable that text is being unnested into
+- Second argument: name of column/variable that is to be unnested 
+- Other details:
+  - All other columns kept
+  - Punctuation removed
+  - Defaults is to convert tokens to lowercase
+
+# Twitter Data
+
+## Democratic candidate tweets
+
+- Time to work with some fun data!
+- We have pulled tweets from four Democratic candidates: Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren
+
+```{r echo = F}
+tweets <- read.csv("data/dem_cand_tweets_2019_10_02.csv")
+#colnames(tweets)
+tweets <- tweets %>%
+  filter(!str_detect(text, "^RT")) %>%   #get rid of retweets
+  mutate(timestamp = ymd_hms(created_at)) %>%
+  select("timestamp","screen_name", "text")
+tweets %>%
+  select("screen_name", "text") %>%
+  slice(1:3)
+```
+
+## Tidy tweets
+
+```{r warning = F}
+remove_reg <- "&amp;|&lt;|&gt;"
+tidy_tweets <- tweets %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(word, text, token = "tweets")
+tidy_tweets %>% slice(1:5)
+```
+
+## Word counts
+
+- What are the most commonly tweeted words by these candidates?
+```{r}
+tidy_tweets %>%
+  count(word, sort = T)
+```
+
+## Stop words
+- Common/non-distinctive words
+
+```{r, echo = T}
+data("stop_words")
+head(stop_words)
+```
+
+## Remove stop words
+
+```{r}
+tidy_tweets <- tidy_tweets %>%
+  filter(!word %in% stop_words $ word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]"))
+tidy_tweets %>%
+  count(word, sort = T)
+```
+
+## Word frequency
+
+- While it's nice to get raw counts, we may prefer to know which words are used more often \textit{relative} to other words. For this we can look towards word frequencies:
+
+```{r frequency}
+frequency_all <-  tidy_tweets %>%
+  count(word, sort = T) %>%
+  mutate(freq = n / sum(n)) 
+```
+
+## Frequency plot
+
+```{r freq-plot, fig.height=3}
+ggplot(frequency_all %>% top_n(10, freq) %>%
+         mutate(word = reorder(word, freq)), aes(x = word, y = freq))+
+  geom_col()+ 
+  coord_flip() 
+```
+
+## Frequency by candidate
+
+```{r}
+frequency <- tidy_tweets %>%
+  group_by(screen_name) %>%
+  count(word, sort = T) %>%
+  left_join(tidy_tweets %>%
+              group_by(screen_name) %>%
+              summarise(total = n()),
+            by = "screen_name") %>%
+  mutate(freq = n / total)
+frequency %>% slice(1:4)
+```
+
+# Sentiment analysis
+
+## Sentiment lexicons
+
+- Now that we have looked at a per-word/token level, we may be interested in determining the general emotion of the text/author
+- We can consider a word to have a particular emotion attached to it
+- We can consider a piece of text as a combination of its individual words, so the sentiment of an entire text is the sum of the sentiments of its individual words
+- There are three general-purpose sentiment lexicons: AFINN, bing, and nrc
+
+## AFINN
+
+- AFINN assigns each word an integer score between -5 and 5
+- Negative scores indicate negative sentiment, and positive scores indicate the opposite
+
+```{r}
+get_sentiments("afinn") 
+```
+
+## bing
+
+- The bing lexicon categorizes words into one of two categories: 'positive' or 'negative'
+```{r}
+get_sentiments("bing") 
+```
+
+## nrc
+
+- The nrc lexicon categorizes words into one of 10 categories: anger, anticipation, disgust, fear, joy, negative, positive, sadness, surprise, or trust. 
+```{r, cache = T}
+get_sentiments("nrc") 
+```
+
+## Important notes about sentiment lexicons
+
+- Not every English word is in a lexicon
+```{r}
+get_sentiments("bing") %>%
+  filter(word == "data")
+```
+
+- These lexicons do not account for qualifiers before a word (ex. "not happy") because these lexicons are constructed for one-word tokens only
+- If we sum up each word's sentiment, it is possible for a piece of text to average out to a sentiment of zero/neutral
+
+## Sentiment of Elizabeth Warren's tweets: bing lexicon
+- We will use the bing lexicon to estimate the sentiment of Elizabeth Warren's tweets:
+
+```{r}
+tidy_tweets %>%
+  filter(screen_name == "ewarren") %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(sentiment) %>%
+  spread(sentiment, n) %>%
+  mutate(sentiment = positive - negative)
+```
+
+- It appears that Warren is pretty neutral...or is she?
+
+## Sentiment of Elizabeth Warren's tweets by month
+
+- What if we look at Warren's tweets by month?
+
+```{r}
+tidy_tweets %>%
+  filter(screen_name == "ewarren") %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(months(timestamp), sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+```
+
+## Most common positive/negative words
+
+```{r echo = T}
+bing_counts <- tidy_tweets %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = T) 
+```
+
+```{r echo = F}
+bing_counts %>%
+  group_by(sentiment) %>%
+  top_n(10, n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x= word, y = n, fill = sentiment))+
+  geom_col(show.legend = F) +
+  facet_wrap(~sentiment, scales = "free_y")+
+  labs(y = "Contribution to sentiment", x = NULL) + 
+  coord_flip()
+```
+
+
+## Customize stop words
+
+- For this analysis, we should consider removing the word 'trump' as a word with positive connotation
+- To do so, we can make a custom list of stop-words:
+
+```{r echo = T}
+my_stop_words <- tibble(word = c("trump"), lexicon = c("custom"))
+custom_stop_words <- bind_rows(my_stop_words, stop_words)
+custom_stop_words
+```
+
+##  Most common positive/negative words with custom stop words 
+
+```{r echo = F}
+tidy_tweets %>%
+  filter(!word %in% custom_stop_words $ word,
+         !word %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word, "[a-z]"))%>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = T) %>%
+  group_by(sentiment) %>%
+  top_n(10, n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x= word, y = n, fill = sentiment))+
+  geom_col(show.legend = F) +
+  facet_wrap(~sentiment, scales = "free_y")+
+  labs(y = "Contribution to sentiment", x = NULL) + 
+  coord_flip()
+```
+
+## Wordclouds
+-We can visualize the frequencies using a word cloud:
+
+```{r wordcloud-code, cache = T, eval = F}
+tidy_tweets %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
+```
+- Or using a sentiment word cloud:
+```{r echo = F}
+custom_tidy_tweets <- tidy_tweets %>%
+  filter(!word %in%custom_stop_words$word,
+         !word %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word, "[a-z]")) 
+```
+
+```{r sentiment-wordcloud-code, warning = F, cache = T, eval = F}
+custom_tidy_tweets%>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = T) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%   # turn data frame into matrix
+  comparison.cloud(max.words = 60, scale=c(3,.5))
+```
+
+## Wordcloud
+```{r wordcloud, cache = T, echo = F}
+tidy_tweets %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
+```
+
+## Sentiment wordcloud
+```{r sentiment-wordcloud, warning = F, cache = T, echo = F}
+custom_tidy_tweets%>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = T) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%   # turn data frame into matrix
+  comparison.cloud(max.words = 50, scale=c(3,.5))
+```
+
+# Comparing candidates
+
+## Word frequencies of Biden vs. Warren
+- We can visualize the differences and similarities in word frequencies between two candidates: 
+```{r frequency-plot, warning=FALSE, eval = F}
+# make into nice plot
+frequency <- frequency %>%
+  select(screen_name, word, freq) %>%
+  spread(screen_name, freq) %>%
+  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+
+# choose 2 candidates
+ggplot(frequency2, aes(JoeBiden, ewarren))+
+  # hide discreteness
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
+  scale_x_log10(labels = percent_format())+
+  scale_y_log10(labels = percent_format())+
+  geom_abline(color = "blue")
+
+```
+
+---
+
+```{r echo = F, warning = F}
+frequency <- frequency %>%
+  select(screen_name, word, freq) %>%
+  spread(screen_name, freq) %>%
+  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+
+ggplot(frequency, aes(JoeBiden, ewarren))+
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
+  scale_x_log10(labels = percent_format())+
+  scale_y_log10(labels = percent_format())+
+  geom_abline(color = "blue")
+```
+
+- Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
+- Words far away from the blue line are favored much more by one candidate than the other
+
+
+## Term and inverse document frequency
+
+- How to quantify what a document is about?
+  - Term frequency (tf): how often a word occurs in the document
+    - Not always the best measurement due to common words like "the", "and", etc. List of stop words is not sustainable
+    - Term frequency will tend to incorrectly emphasize documents using the word "the"; "the" is not a good token to distinguish between tweets
+  - Inverse document frequency (idf): increases weight of rare words and decreases weight of common words in a document 
+    - Measure of how much information a word provides
+    
+## tf-idf
+
+$$idf(\text{word}) = \log \left(\dfrac{\text{number of documents}}{\text{number of documents containing word}} \right)$$
+
+- If every document contains the word, the fraction = 1, and so $idf = \log(1) = 0$. 
+  - i.e. The word does not tell us much information about the document
+- tf-idf is the product of tf and idf, and is intended to measure how important a word is relative to the document it came from
+
+## high tf-idf 
+- The `bind_tf_idf()` function takes a tidy text dataset as input and returns a dataframe with tf, idf, and tf-idf calculated
+```{r echo = F}
+tidy_tweets2 <- tidy_tweets %>%
+  filter(!str_detect(word, "@")) %>%
+  filter(!str_detect(word, "#")) %>%
+  select(screen_name, word) 
+```
+
+- Which terms have high tf-idf?
+```{r tf-idf}
+candidate_tfidf <- tidy_tweets2 %>%
+  count(screen_name, word, sort= T) %>%
+  bind_tf_idf(word, screen_name, n)
+candidate_tfidf %>%
+  arrange(desc(tf_idf))
+```
+- This should make sense, because some names and hashtags are characteristic to a particular document/candidate
+
+## Visualizing tf-idf
+- Which terms have the highest tf-idf for the four candidates?
+
+```{r tf-idf-plot, echo = F}
+candidate_tfidf %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(screen_name) %>%
+  top_n(10, tf_idf) %>%
+  ungroup() %>%
+  ggplot(aes(word, tf_idf, fill = screen_name))+
+  geom_col(show.legend =F) +
+  labs(x = NULL, y = "tf-idf") + 
+  facet_wrap(~screen_name, ncol= 2, scales= "free")+
+  coord_flip()
+```
+
+## Probability of using a word
+- We have examined which words have high tf-idf, that is, which words are distinctive for a particular candidate
+- Now we can also explore questions such as: given a word, which candidate is more likely to use that word in a tweet?
+- We will utilize the log-odds ratio 
+
+## Odds ratio and log-odds ratio
+- Below, we define the odds ratio for Candidate A versus Candidate B
+$$\text{OR}_{A:B}(word) = \dfrac{\text{odds}_A}{\text{odds}_B} = \dfrac{\text{Prob(A uses word)}}{\text{Prob(B uses word)}}$$
+- The probability that Candidate A uses the word is the number of times A used the word, divided by the total number of words used by A: 
+$$\text{Prob(A uses word)} = \dfrac{n_A}{total_A}$$
+
+## Log-odds ratio
+
+$$ \log \text{OR}_{A:B}(word)  = \log \left( \dfrac{n_A / total_A}{n_B / total_B}\right) $$
+
+- Equal odds corresponds to OR = 1, which corresponds to log(OR) = 0
+- If candidate A uses the word with higher probability, then log(OR) > 0
+- We use the following approximation in case a candidate does not use the word at all
+$$ \log \text{OR}_{A:B}(word) \approx \log \left( \dfrac{(n+1)_A / (total+1)_A}{(n+1)_B / (total+1)_B}\right)$$
+
+
+## Word usage: equally likely
+-Here, we calculate log-odds ratios for Biden versus Warren and display them in ascending order of absolute value of log-odds ratio
+
+```{r word-usage-likely, echo = F }
+candidates <- c("JoeBiden", "ewarren")
+word_ratios <- tidy_tweets %>%
+  filter(screen_name %in% candidates) %>%
+  filter(!str_detect(word, "^@")) %>%
+  count(word, screen_name) %>%
+  group_by(word) %>%
+  filter(sum(n) >= 10) %>% # only consider more frequently uses words
+  ungroup() %>%
+  spread(screen_name, n, fill = 0) %>%
+  mutate_if(is.numeric, list(~(. +1) / (sum(.) + 1))) %>%
+  mutate(logratio = log(eval(parse(text = candidates[1])) / eval(parse(text = candidates[2])))) %>%
+  select(word, logratio)%>%
+  arrange(desc(logratio))
+word_ratios %>%
+  arrange(abs(logratio))
+```
+
+- Words about equally likely to be tweeted from the two candidates are non-buzzwords
+
+## Word usage: most distinctive 
+- The words that are most likely to be from Biden and not Warren will have the largest, most positive ratios
+- The words that are most likely to be from Warren and not Biden will have the smallest, most negative ratios
+- The plot on the next slides shows the 20 most positive and negative ratios
+
+## Word usage: most distinctive cont.
+
+```{r word-usage-diff, echo = F}
+word_ratios %>% 
+  group_by(logratio < 0) %>%
+  top_n(20, abs(logratio)) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, logratio))%>%
+  ggplot(aes(word, logratio, fill = logratio < 0)) +
+  geom_col(show.legend = F) +
+  coord_flip() +
+  ylab(paste("log odds ratio", candidates[1], "/", candidates[2])) +
+  scale_fill_discrete(name = "", labels = c(candidates[1], candidates[2]))
+```
+- The most distinctive words are much more personal/characteristic of the candidate
+  - Biden talks a lot about himself, whereas Warren talks more about her platform
+
+# Beyond one-word tokens
+
+## n-grams
+- We can tokenize text into consecutive sequences of $n$ words called n-grams
+  - One-word token is a `unigram', two consecutive word tokens are 'bigrams', etc.
+  
+```{r bigrams, eval = T, cache = T, warning = F}
+tweet_bigrams <- tweets %>%
+  select(screen_name, text) %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+tweet_bigrams
+```
+
+
+## Counts of bigrams
+
+```{r bigram-counts}
+tweet_bigrams %>%
+  count(bigram, sort = T)
+```
+ 
+## Remove custom stop_words
+```{r http-stop-words}
+my_stop_words <- tibble(word = c("http", "https"), lexicon = c("custom"))
+custom_stop_words <- bind_rows(my_stop_words, stop_words)
+
+bigrams_sep <- tweet_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") 
+bigrams_filtered <- bigrams_sep %>%
+  filter(!word1 %in% custom_stop_words$word,
+         !word1 %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word1, "[a-z]"), 
+         !word2 %in% custom_stop_words$word,
+         !word2 %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word2, "[a-z]"))
+```
+
+```{r custom-bigram-counts, echo =F}
+bigram_counts <- bigrams_filtered %>%
+  count(word1, word2, sort = T)
+bigram_counts
+```
+
+## Words within a single tweet
+- We may be interested in which words tend to appear in a single tweet (not necessarily consecutive pairs)
+- For each candidate, we create a new variable called `rank` to indicate the order in which the tweets were published
+- Then we count the number of word pairs that occur within a single tweet
+```{r create-sections, eval = T, echo= F, warning = F}
+tweet_section_words <-  tweets %>%
+  mutate(text = str_remove_all(text, remove_reg)) %>%
+  select(screen_name, text, timestamp) %>%
+  group_by(screen_name) %>%
+  # create notion of section/single tweet
+  mutate(rank = rank(desc(timestamp)) )%>%
+  ungroup() %>%
+  unnest_tokens(word, text, token = "tweets") %>%
+  filter(!word %in% stop_words $ word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]"))
+```
+
+## Word pairs 
+
+```{r word-pairs}
+word_pairs <- tweet_section_words %>%
+  pairwise_count(word, rank, sort= T )
+word_pairs
+```
+
+## Pairwise correlations
+- We see that "health" and "care" are the two most common co-occurring words within a single tweet, followed by "country" and "people"
+- However, you may recall that those words are also among the most common individual unigrams
+- Therefore, it may be more meaningful to measure how often pairs of words are used together relative to how often they are used individually
+- This is the correlation among words
+
+## Phi coefficient  
+- We will use the phi coefficient, which focuses on how much more likely it is that either both/neither of two words appear, versus only one of the two appearing
+- A correlation close to 0 means that the two words are not likely to co-occur, and a correlation close to $\pm 1$ means that the two are both likely to simultanegously occur or not occur
+- We will focus on the most common individual words
+
+```{r}
+word_cors <- tweet_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 75) %>%
+  pairwise_cor(word, rank, sort = T)
+```
+
+
+## Most positively correlated pairs
+- The most positively correlated pairs of words are common two-word terms: health care, student debt, etc.
+
+```{r pairwise-cor-high}
+word_cors %>%
+  slice(1:10)
+```
+
+## Most negatively correlated pairs
+- No pairs of words are extremely negatively correlated
+```{r}
+word_cors %>% tail()
+```
+
+## Pairwise correlation cont.
+- When we looked at pairwise counts, "people" and "country" occurred frequently in a single tweet. But how correlated are they?
+```{r pairwise-cor-low}
+word_cors  %>%
+  filter(item1 == "people" & item2 == "country")
+```
+
+- So even though "people" and "country" co-occur very often, they are not very associated. 
+- That is, these two words often occur together, but many tweets use one word and not the other
+
+## Graph of highly correlated words
+- Lastly, we can visualize the correlations and clusters of high, positively correlated word pairs
+```{r corr-graph-code, eval = F}
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+---
+
+```{r corr-graph, echo = F}
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+# Classification
+
+## Classification - Bag of Words
+
+- We have been generally treating text as a bag of words. The order does not really matter (maybe with n-grams there is some dependence, but not much). 
+- In this case, a corpus can be represented as a document-term matrix. Each row is a document, each column is a word, an the $ij$ entry is the number of times word $j$ appeared in document $i$. 
+- These matrices are extremely large but also extremely sparse. Most entries are 0. Special tools have beem made to represent them in a memory-saving manner. 
+
+## Document-Term Example
+
+```{r dtm_example}
+text
+dfm(text) %>% convert(to = "matrix") %>% {.[,1:10]}
+```
+
+## Example Speeches
+
+- The data we will use for this section are the State of the Union speeches from 1970 onward. 
+
+```{r load_sou,include=F}
+files <- list.files("data/state_of_union",pattern = "\\.txt$")
+sou_data <- lapply(files,function(f) data.frame(file = f,text = read_lines(str_c("data/state_of_union/",f)),stringsAsFactors = F)) %>% 
+  do.call(what = "rbind") %>% 
+  mutate(year = str_extract(file,"[:digit:]+"),
+         pres = str_extract(file,"[:alpha:]+")) %>% 
+  left_join(read_csv("data/state_of_union/stateofunion.csv") %>% mutate(pres=str_to_lower(President) %>% str_remove_all(" ")) %>% select(pres,Party) %>% unique) %>% 
+  as_tibble()
+```
+
+```{r}
+sou_data %>% slice(1:3)
+```
+
+## DFM objects
+
+```{r sou_convert}
+sou_data_dfm <- 
+  dfm(sou_data$text,
+      remove = c(stop_words$word,"laughter","applause"),
+      remove_punct = T)
+sou_data_dfm@docvars <- sou_data %>% select(-text) %>% as.data.frame()
+sou_data_dfm
+
+object.size(sou_data_dfm) %>% format(units = "Mb")
+convert(sou_data_dfm,to = "matrix") %>% 
+  object.size() %>% format(units = "Mb")
+```
+
+## Logistic regression
+
+- The classification task we will focus on is recovering party from the paragraphs of a speech. 
+- We have `r nrow(sou_data_dfm)` documents but `r ncol(sou_data_dfm)` unique words! Logistic regression can only work with $p < n$. 
+- Need some way to reduce the dimensions 
+
+## Logistic regression - sentiment analysis
+
+One way we discussed before is mapping each word to a "sentiment". We can reduce the columns of the dfm to counts of the sentiment words of each type. 
+
+```{r dfm_to_dsm,cache=T}
+sou_data_dfm <- 
+  sou_data_dfm %>% 
+  dfm_trim(min_termfreq = 3)
+sentiments <- get_sentiments("nrc")
+sentiment_levels <- unique(sentiments$sentiment)
+sou_words <- sou_data_dfm@Dimnames$features
+sou_sentiment_dfm <- 
+  sou_data_dfm %>% apply(1,function(r){
+    words <- rep(sou_words,times = r) %>% {data.frame(word = .,stringsAsFactors = F)}
+    row_sentiments <- inner_join(words,sentiments,by = "word")
+    sapply(sentiment_levels,function(s) sum(s == row_sentiments$sentiment))
+  }) %>% t
+
+sou_sentiment_dfm_std <- sou_sentiment_dfm %>% 
+  as_tibble() %>% 
+  mutate(n = rowSums(sou_sentiment_dfm)) %>% 
+  mutate(party = sou_data$Party,
+         no_sentiment_words = as.numeric(n == 0))
+```
+
+
+## Logistic regression - sentiment analysis
+
+```{r dsm_logit}
+logit_sentiment <- glm(party == "Democrat" ~ . -n-no_sentiment_words,
+                       data = sou_sentiment_dfm_std,
+                       family = binomial(link = "logit"))
+
+#accuracy rate
+sou_sentiment_dfm_std$pred_party <- 
+  if_else(predict(logit_sentiment,type = "response")>.5,
+          "Democrat","Republican")
+mean(sou_sentiment_dfm_std$party == 
+       sou_sentiment_dfm_std$pred_party)
+```
+
+## Logistic regression - sentiment analysis
+
+```{r paragraph_logit_results}
+kableExtra::kable(xtable::xtable(logit_sentiment),digits = 3)
+```
+
+## What if we do it by speeches instead? 
+
+```{r dsm_speech_logit}
+sou_sentiment_dfm_speech <- sou_sentiment_dfm %>% 
+  as_tibble %>% 
+  mutate(year = sou_data$year,
+         party = sou_data$Party,
+         pres = sou_data$pres) %>% 
+  group_by(year,party,pres) %>% 
+  summarise_all(sum)
+
+logit_sentiment_by_speech <- glm(party == "Democrat" ~ . - year - pres,
+                       data = sou_sentiment_dfm_speech,
+                       family = binomial(link = "logit"))
+```
+
+## How well does the classifier do by President?
+
+```{r dsm_results}
+sou_sentiment_dfm_speech$pred_party <- ifelse(predict(logit_sentiment_by_speech) > 0,"Democrat","Republican")
+
+sou_sentiment_dfm_speech %>% 
+  group_by(pres,party) %>% 
+  summarise(n_speech = n(),pred_dem_prop = mean(pred_party == "Democrat")) %>% 
+  arrange(party,pred_dem_prop)
+```
+
+
+## Generative Models
+
+- Sentiment is useful for some ad-hoc methods or high-level summaries, but it lacks interpretability as a generative model. 
+- Some simple bag-of-words generative models can be used for classification. 
+
+## Generative Models
+
+- Let each document be represented by a vector of word counts $W_d$. 
+- Political parties differ by the probabilities that they choose each word. $\theta_d$ and $\theta_r$ give the probabilities that each word is chosen by Democrats and Republicans respectively. 
+- Then the observed word counts for a president of party $p$ conditional on $\theta_p$ is thus a multinomial likelihood: $W_d | \theta_p \sim \text{Multinomial}(n_d,\theta_p)$. 
+- $\theta_r$ and $\theta_d$ are unknown. A conjugate prior is from the Dirichlet distribution. $\theta_p \sim \text{Dirichlet}(\alpha)$. The Dirichlet distribution is a multivariate Beta distribution, and is conjugate with the multinomial likelihood, similar to the Beta and Binomial conjugacy.
+
+## Generative Models - Distributions
+
+- What is a multinomial distribution? Just like a Binomial, there are $n$ independent trials, but each trial can have $k$ unique, discrete outcomes. Say you ask 10 people what their favorite color is and tabulate the responses. The responses plausibly have a multinomial distribution. 
+
+- What is a Dirichlet distribution? Just like a Beta distribution, but with $k$ parameters rather than two. $\theta \sim \text{Dir}(\mathbf{z})$ implies that $\sum_i^k \theta_i = 1$ and $\theta_i > 0$. $E[\theta_i] = \frac{z_i}{\sum_i^k z_i}$. As the sum $\sum_i^k z_i$ increases (often called the "concentration" of the Dirichlet), the distribution gets more and more concentrated around the means. In priors, the parameters are often all set to the same value and we write $\theta \sim \text{Dir}(\alpha)$ to imply that $E[\theta_i] = 1/k$ with concentration $k\alpha$. 
+
+## Generative Models - Estimation
+
+Let $W_d$ be a k-dimensional count vector with conditional distribution $W_d|\theta_p \sim \text{Multi}(n,\theta_p)$ where $n = \sum_{i=1}^k W_{di}$. Let the prior on $\theta_p$ be Dirichlet($\alpha$): $p(\theta_p) \propto \prod_{i=1}^k \theta_{pi}^{\alpha-1}$. 
+
+\[
+\begin{align}
+p(\theta_p|W_d) &\propto p(W_d|\theta_p)p(\theta_p) \\
+  &\propto \left(\prod_{i=1}^k \theta_{pi}^{W_{di}} \right) \left(\prod_{i=1}^k \theta_{pi}^{\alpha - 1} \right) \\
+  &\propto \prod_{i=1}^k \theta_{pi}^{W_{di} + \alpha - 1}   \\
+  &\propto \text{Dir}(W_d + \alpha) \\
+\end{align} \]
+
+## Generative Models - Classification
+
+Thus, given party-labeled speeches, we can quickly update a prior distribution on the party-specific word probabilities. How can we use this for classification? 
+
+Given a piece of text with unknown authorship, we can compute the posterior-predictive probability that it was generated by either a Democrat or a Republican. 
+
+## Generative Models - Classification
+
+Let $W_d$ be the word counts for Democratic speeches and $W_r$ be the word counts for Republican speeches. $W_{new}$ is the word count vector of the new document. $n_{new}$, $n_d$, and $n_r$ are the number of new, Democratic, and Republican words. 
+
+\[
+\begin{align}
+p_{D} &= P(\text{Dem}|W_{new},W_d,W_r) \\
+  &\propto P(W_{new}|\text{Dem},W_d,W_r) \\
+  &= \int P(W_{new}|\text{Dem},\theta_d)p(\theta_d|W_d) \ d\theta_d \\
+  &= \frac{n_{new}! \ \Gamma(n_d + k\alpha)}{\Gamma(n_{new} + n_d + k\alpha)}\prod_{i=1}^k\frac{W_{new,i} + W_{d,i} + \alpha}{W_{new,i}! \ \Gamma(W_{d,i} + \alpha)}\\
+\end{align}
+\]
+
+$P(W_{new}|\text{Dem},\theta_d)$ is a multinomial likelihood, and the posterior is Dirichlet, so this integral is analytically computable. It is actually a known distribution, the Dirichlet-Multinomial.
+
+## Generative Models - Classification
+
+A Dirichlet-Multinomial distribution is the result of $n$ independent, descrete-outcomed trials (same as in the multinomial) except the success probability is drawn from a Dirichlet distribution with specified parameters. This is the same form as the posterior-predictive for our example. Thus, 
+
+\[p_D \propto \text{Dir-Multi}(W_{new}|W_d + \alpha)\]
+\[p_R \propto \text{Dir-Multi}(W_{new}|W_r + \alpha)\]
+\[p_D = \frac{\text{Dir-Multi}(W_{new}|W_d + \alpha)}{\text{Dir-Multi}(W_{new}|W_d + \alpha) + \text{Dir-Multi}(W_{new}|W_r + \alpha)}\]
+
+## Generative Models - Classification Code
+
+```{r, cache=T}
+
+lddirmult <- function(x,alpha){
+  n <- sum(x)
+  lc <- lgamma(n+1) + lgamma(sum(alpha)) - lgamma(n + sum(alpha))
+  lkernel <- sum(lgamma(x + alpha) - lgamma(x + 1) - lgamma(alpha))
+  lc + lkernel
+}
+
+loo_classify <- function(docs,alpha,truth){
+  lapply(1:nrow(docs),function(d){
+    w <- docs[d,]
+    
+    #remove from current counts
+    full_counts_new <- docs %>% dfm_subset(1:nrow(docs) != d) %>% dfm_group(truth[-d])
+    
+    #compute log probabilities
+    lprobs <- sapply(unique(truth),
+                     function(t) lddirmult(convert(w,"matrix"),
+                                           convert(full_counts_new[t,],"matrix") + alpha))
+    #return to raw scale
+    probs <- lprobs %>% {. - max(.)} %>% exp %>% {./sum(.)}
+    return(c(round(probs,3),unique(truth)[which.max(lprobs)]))
+  })
+}
+
+sou_dfm_by_speech <- 
+  sou_data_dfm %>%
+  dfm_group("year")
+
+loo_results <- loo_classify(sou_dfm_by_speech,
+                  alpha = .01,
+                  truth = sou_dfm_by_speech@docvars$Party) %>% 
+  do.call(what = rbind)
+
+table(truth = sou_dfm_by_speech@docvars$Party,
+      guess = loo_results[,ncol(loo_results)])  
+  
+```
+
+## Genertive Models - Other Applications
+
+- These methods are useful anytime you have very high dimensional discrete data and have many labeled observations:   
+- Identifying species by genetic markers
+- Authorship identification
+- Measures of separation
+
+# Topic Models
+
+## Topic Models - Motivation
+
+The previous method is useful for labeled data and classification. But the classification does not tell you what the text is about and not all data have meaningful labels. Topic models generally do unsupervised clustering of documents. 
+
+## Topic Models - LDA
+
+LDA, the Latent Dirichlet Allocation, is the most common topic model. In LDA, each word $i$ in  document $d$, $W_{di}$, is associated with a topic $Z_{di}$. The topic distribution for topic $t$, $\beta_t$, is a distribution over all possible words. If a word is drawn from topic $t$, $\beta_{t}$ gives the probability of drawing each word. Each document is a unique mixture over topics. For document $d$, the probability of drawing each topic is given by $\theta_d$. Independent Dirichlet($\phi$) priors are placed on each $\beta_t$ and Dirichlet($\alpha$) priors on $\theta_d$. 
+
+## Topic Models - LDA
+
+To generate a corpus of documents of pre-determined size: 
+
+1. For each topic $t$, draw $\beta_t \sim \text{Dir}(\phi)$. 
+2. For each document $d$, draw $\theta_d \sim \text{Dir}(\alpha)$.
+  a. For each word $i$ in document $d$, draw $Z_{di} \sim \text{Cat}(\theta_d)$
+  b. For each word $i$ in document $d$, draw $W_{di} \sim \text{Cat}(\beta_{Z_{id}})$
+
+## Topic Models - LDA
+
+```{r lda_results}
+lda_speech <- sou_dfm_by_speech %>% 
+  dfm_remove("america",valuetype = "regex") %>% 
+  topicmodels::LDA(k=10)
+topicmodels::terms(lda_speech,5)
+```
+
+# Questions?
+
