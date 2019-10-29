@@ -6,3 +6,7 @@
 *.DS_store
 *.pdf
 *.docx
+
+textanalysis_slides_cache/*
+textanalysis_slides_files/*
+textanalysis_slides_casestudies_*
