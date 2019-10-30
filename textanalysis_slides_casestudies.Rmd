@@ -50,6 +50,7 @@ library(quanteda)
 
 - We typically think of text as a (very) long string, but this format is quite hard to work with. 
 - Thus, we will work in the 'tidy text format': a table with one token per row and a document id
+
 ```{r introduce_text}
 text <- c("We typically think of text as a (very) long string, but this format is quite hard to work with.", 
           "Specifically, we will work in the 'tidy text format': a table with one token per row")
@@ -239,7 +240,6 @@ tidy_tweets %>%
   count(months(timestamp), sentiment) %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative)
-
 ```
 
 ## Most common positive/negative words
@@ -262,7 +262,6 @@ bing_counts %>%
   labs(y = "Contribution to sentiment", x = NULL) + 
   coord_flip()
 ```
-
 
 ## Customize stop words
 
@@ -295,46 +294,6 @@ tidy_tweets %>%
   coord_flip()
 ```
 
-## Wordclouds
--We can visualize the frequencies using a word cloud:
-
-```{r wordcloud-code, cache = T, eval = F}
-tidy_tweets %>%
-  count(word) %>%
-  with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
-```
-- Or using a sentiment word cloud:
-```{r echo = F}
-custom_tidy_tweets <- tidy_tweets %>%
-  filter(!word %in%custom_stop_words$word,
-         !word %in% str_remove_all(custom_stop_words$word, "'"),
-         str_detect(word, "[a-z]")) 
-```
-
-```{r sentiment-wordcloud-code, warning = F, cache = T, eval = F}
-custom_tidy_tweets%>%
-  inner_join(get_sentiments("bing"), by = "word") %>%
-  count(word, sentiment, sort = T) %>%
-  acast(word ~ sentiment, value.var = "n", fill = 0) %>%   # turn data frame into matrix
-  comparison.cloud(max.words = 60, scale=c(3,.5))
-```
-
-## Wordcloud
-```{r wordcloud, cache = T, echo = F}
-tidy_tweets %>%
-  count(word) %>%
-  with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
-```
-
-## Sentiment wordcloud
-```{r sentiment-wordcloud, warning = F, cache = T, echo = F}
-custom_tidy_tweets%>%
-  inner_join(get_sentiments("bing"), by = "word") %>%
-  count(word, sentiment, sort = T) %>%
-  acast(word ~ sentiment, value.var = "n", fill = 0) %>%   # turn data frame into matrix
-  comparison.cloud(max.words = 50, scale=c(3,.5))
-```
-
 # Comparing candidates
 
 ## Word frequencies of Biden vs. Warren
@@ -354,7 +313,6 @@ ggplot(frequency2, aes(JoeBiden, ewarren))+
   scale_x_log10(labels = percent_format())+
   scale_y_log10(labels = percent_format())+
   geom_abline(color = "blue")
-
 ```
 
 ---
@@ -375,60 +333,6 @@ ggplot(frequency, aes(JoeBiden, ewarren))+
 
 - Words near the blue line are used with roughly equal frequencies between Joe Biden and Elizabeth Warren
 - Words far away from the blue line are favored much more by one candidate than the other
-
-
-## Term and inverse document frequency
-
-- How to quantify what a document is about?
-  - Term frequency (tf): how often a word occurs in the document
-    - Not always the best measurement due to common words like "the", "and", etc. List of stop words is not sustainable
-    - Term frequency will tend to incorrectly emphasize documents using the word "the"; "the" is not a good token to distinguish between tweets
-  - Inverse document frequency (idf): increases weight of rare words and decreases weight of common words in a document 
-    - Measure of how much information a word provides
-    
-## tf-idf
-
-$$idf(\text{word}) = \log \left(\dfrac{\text{number of documents}}{\text{number of documents containing word}} \right)$$
-
-- If every document contains the word, the fraction = 1, and so $idf = \log(1) = 0$. 
-  - i.e. The word does not tell us much information about the document
-- tf-idf is the product of tf and idf, and is intended to measure how important a word is relative to the document it came from
-
-## high tf-idf 
-- The `bind_tf_idf()` function takes a tidy text dataset as input and returns a dataframe with tf, idf, and tf-idf calculated
-```{r echo = F}
-tidy_tweets2 <- tidy_tweets %>%
-  filter(!str_detect(word, "@")) %>%
-  filter(!str_detect(word, "#")) %>%
-  select(screen_name, word) 
-```
-
-- Which terms have high tf-idf?
-```{r tf-idf}
-candidate_tfidf <- tidy_tweets2 %>%
-  count(screen_name, word, sort= T) %>%
-  bind_tf_idf(word, screen_name, n)
-candidate_tfidf %>%
-  arrange(desc(tf_idf))
-```
-- This should make sense, because some names and hashtags are characteristic to a particular document/candidate
-
-## Visualizing tf-idf
-- Which terms have the highest tf-idf for the four candidates?
-
-```{r tf-idf-plot, echo = F}
-candidate_tfidf %>%
-  arrange(desc(tf_idf)) %>%
-  mutate(word = factor(word, levels = rev(unique(word)))) %>%
-  group_by(screen_name) %>%
-  top_n(10, tf_idf) %>%
-  ungroup() %>%
-  ggplot(aes(word, tf_idf, fill = screen_name))+
-  geom_col(show.legend =F) +
-  labs(x = NULL, y = "tf-idf") + 
-  facet_wrap(~screen_name, ncol= 2, scales= "free")+
-  coord_flip()
-```
 
 ## Probability of using a word
 - We have examined which words have high tf-idf, that is, which words are distinctive for a particular candidate
@@ -567,7 +471,7 @@ word_pairs
 ```
 
 ## Pairwise correlations
-- We see that "health" and "care" are the two most common co-occurring words within a single tweet, followed by "country" and "people"
+- We see that "health" and "care" are the two most common co-occurring words within a single tweet, and "country" and "people" also commonly co-occur. 
 - However, you may recall that those words are also among the most common individual unigrams
 - Therefore, it may be more meaningful to measure how often pairs of words are used together relative to how often they are used individually
 - This is the correlation among words
@@ -584,19 +488,12 @@ word_cors <- tweet_section_words %>%
   pairwise_cor(word, rank, sort = T)
 ```
 
-
 ## Most positively correlated pairs
 - The most positively correlated pairs of words are common two-word terms: health care, student debt, etc.
 
 ```{r pairwise-cor-high}
 word_cors %>%
   slice(1:10)
-```
-
-## Most negatively correlated pairs
-- No pairs of words are extremely negatively correlated
-```{r}
-word_cors %>% tail()
 ```
 
 ## Pairwise correlation cont.
@@ -720,8 +617,8 @@ sou_sentiment_dfm_std[1:5,1:5]
 
 ## Logistic regression - sentiment analysis
 
-```{r dsm_logit}
-logit_sentiment <- glm(party == "Democrat" ~ . -n-no_sentiment_words,
+```{r dsm_logit,cache=F}
+logit_sentiment <- glm(party == "Democrat" ~ . -n,
                        data = sou_sentiment_dfm_std,
                        family = binomial(link = "logit"))
 
@@ -735,7 +632,7 @@ mean(sou_sentiment_dfm_std$party ==
 
 ## Logistic regression - sentiment analysis
 
-```{r paragraph_logit_results}
+```{r paragraph_logit_results,cache=F}
 kableExtra::kable(xtable::xtable(logit_sentiment),digits = 3)
 ```
 
@@ -924,6 +821,14 @@ LDA, the Latent Dirichlet Allocation, is the most common topic model. In LDA, ea
 A topic is a probability distribution over words. Given that a word is from topic $k$, the probability of drawing a specific word $w$ is given by $\beta_{kw}$. Each topic gives a different probability for drawing that same word $w$. 
 
 Independent Dir($\phi$) priors are placed on each $\beta_k$ and Dir($\alpha$) priors on $\theta_d$. 
+
+## Topic Models - LDA 
+
+Most topic modeling packages in R have built in estimation methods that are very fast. 
+
+Results are often characterized not by inference on a specific parameter, but by visualizing topics and comparing documents by what toipcs they discus. 
+
+Sometimes the document-topic proportions are passed to a second algorithm as a dimension reduction tool to learn something about the documents (similar to how we used sentiment scores for logistic regression). 
 
 # Questions?
 
