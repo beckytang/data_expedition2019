@@ -537,8 +537,8 @@ word_cors %>%
 ## Classification - Bag of Words
 
 - We have been generally treating text as a bag of words. The order does not really matter (maybe with n-grams there is some dependence, but not much). 
-- In this case, a corpus can be represented as a document-term matrix. Each row is a document, each column is a word, an the $ij$ entry is the number of times word $j$ appeared in document $i$. 
-- These matrices are extremely large but also extremely sparse. Most entries are 0. Special tools have beem made to represent them in a memory-saving manner. 
+- In this case, a corpus can be represented as a document-term matrix. Each row is a document, each column is a word, and the $ij$-th entry is the number of times word $j$ appears in document $i$. 
+- These matrices are extremely large but also extremely sparse. Most entries are 0. Special tools have been made to represent them in a memory-saving manner. 
 
 ## Document-Term Example
 
@@ -583,13 +583,13 @@ sou_data_dfm@docvars <- sou_data %>% select(-text) %>% as.data.frame()
 
 ## Logistic regression
 
-- The classification task we will focus on is recovering party from the paragraphs of a speech. 
+- The classification task we will focus on is recovering political party from the paragraphs of a speech. 
 - We have `r nrow(sou_data_dfm)` documents but `r ncol(sou_data_dfm)` unique words! Logistic regression can only work with fewer features than observations ($p < n$). 
 - Need some way to reduce the dimensions 
 
 ## Logistic regression - sentiment analysis
 
-One way we discussed before is mapping each word to a "sentiment". We can reduce the columns of the dfm to counts of the sentiment words of each type. For each row (paragraph), sum all the counts of words for each sentiment. The output is a count matrix with the $ij$ entry showing the number of words in paragraph $i$ with sentiment $j$. 
+One way we discussed before is mapping each word to a "sentiment". We can reduce the columns of the dfm to counts of the sentiment words of each type. For each row (paragraph), sum all the counts of words for each sentiment. The output is a count matrix with the $ij$ entry showing the number of words in row $i$ with sentiment $j$. 
 
 ```{r dfm_to_dsm,cache=T,echo=F}
 sou_data_dfm <- 
@@ -632,7 +632,7 @@ mean(sou_sentiment_dfm_std$party ==
 
 ## Logistic regression - sentiment analysis
 
-```{r paragraph_logit_results,cache=F}
+```{r paragraph_logit_results,cache=F, echo = F}
 kableExtra::kable(xtable::xtable(logit_sentiment),digits = 3)
 ```
 
@@ -674,13 +674,22 @@ sou_sentiment_dfm_speech %>%
 - Let each document be represented by a vector of word counts $W_d$. 
 - Political parties differ by the probabilities that they choose each word. $\theta_d$ and $\theta_r$ give the probabilities that each word is chosen by Democrats and Republicans respectively. 
 - Then the observed word counts for a president of party $p$ conditional on $\theta_p$ is thus a multinomial likelihood: $W_d | \theta_p \sim \text{Multinomial}(n_d,\theta_p)$. 
-- $\theta_r$ and $\theta_d$ are unknown. A conjugate prior is from the Dirichlet distribution. $\theta_p \sim \text{Dirichlet}(\alpha)$. The Dirichlet distribution is a multivariate Beta distribution, and is conjugate with the multinomial likelihood, similar to the Beta and Binomial conjugacy.
 
-## Generative Models - Distributions
 
-- What is a multinomial distribution? Just like a Binomial, there are $n$ independent trials, but each trial can have $k$ unique, discrete outcomes. Say you ask 10 people what their favorite color is and tabulate the responses. The responses plausibly have a multinomial distribution. 
+## Multinomial Distribution
 
-- What is a Dirichlet distribution? Just like a Beta distribution, but with $k$ parameters rather than two. $\theta \sim \text{Dir}(\mathbf{z})$ implies that $\sum_i^k \theta_i = 1$ and $\theta_i > 0$. $E[\theta_i] = \frac{z_i}{\sum_i^k z_i}$. As the sum $\sum_i^k z_i$ increases (often called the "concentration" of the Dirichlet), the distribution gets more and more concentrated around the means. In priors, the parameters are often all set to the same value and we write $\theta \sim \text{Dir}(\alpha)$ to imply that $E[\theta_i] = 1/k$ with concentration $k\alpha$. 
+- What is a multinomial distribution? Just like a Binomial, there are $n$ independent trials, but each trial can have $k$ unique, discrete outcomes. Say you ask $n=10$ people what their favorite color is and tabulate the responses. The responses plausibly have a multinomial distribution. 
+- So if  $\boldsymbol{w} | \boldsymbol{\theta} \sim \text{Multinomial}(n,\boldsymbol{\theta})$, then the pmf is $p(\boldsymbol{w}) = \dfrac{n!}{w_1! \cdots w_k!}\theta_1^{w_1}\cdots \theta_k^{w_k}$, where $\sum_i^k w_i = n$ and $\sum_i^k \theta_i = 1$.
+
+## Generative Models: Conjugate priors
+- Of course, $\theta_r$ and $\theta_d$ are unknown and we would like to estimate them from the data. Sounds like posterior inference!
+- Luckily there is a nice conjugate prior for multinomial data! 
+- Dirichlet distribution: $\theta_p \sim \text{Dirichlet}(\alpha)$. 
+
+## Dirichlet Distribution
+- The Dirichlet distribution is a multivariate Beta distribution, and is conjugate with the multinomial likelihood, similar to the Beta and Binomial conjugacy.
+- The Dirichlet is just like a Beta distribution, but with $k$ parameters rather than two. $\boldsymbol{\theta} = (\theta_1, \ldots,\theta_k) \sim \text{Dir}(\mathbf{z})$. The pdf is proportional to $p(\boldsymbol{\theta}) \propto \prod_{i=1}^k \theta_i^{z_i-1}$. This implies that $\sum_i^k \theta_i = 1$ and $\theta_i \in (0,1)$. 
+- $E[\theta_i] = \frac{z_i}{\sum_i^k z_i}$. As the sum $\sum_i^k z_i$ increases (often called the "concentration" of the Dirichlet), the distribution gets more and more concentrated around the means. In priors, the parameters are often all set to the same value and we write $\theta \sim \text{Dir}(\alpha)$ to imply that $E[\theta_i] = 1/k$ with concentration $k\alpha$. 
 
 ## Generative Models - Estimation
 
@@ -723,7 +732,7 @@ $P(W_{new}|\text{Dem},\theta_d)$ is a multinomial likelihood, and the posterior 
 
 ## Generative Models - Classification
 
-A Dirichlet-Multinomial distribution is the result of $n$ independent, discrete-outcomed trials (same as in the multinomial) except the success probability is drawn from a Dirichlet distribution with specified parameters. This is the same form as the posterior-predictive for our example. Thus, 
+A Dirichlet-Multinomial distribution is the result of $n$ independent, discrete-outcomed trials (same as in the multinomial) where the success probability is drawn from a Dirichlet distribution with specified parameters. This is the same form as the posterior-predictive for our example. Thus, 
 
 \[p_D \propto \text{Dir-Multi}(W_{new}|W_d + \alpha)\]
 \[p_R \propto \text{Dir-Multi}(W_{new}|W_r + \alpha)\]
