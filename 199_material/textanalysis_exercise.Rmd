@@ -1,0 +1,307 @@
+---
+title: "Text Analysis"
+author: "Your name here"
+date: "October 3, 2019"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidytext)
+library(stringr)
+library(tidyr)
+library(scales)
+library(textdata)
+library(wordcloud)
+library(reshape2)
+library(lubridate)
+library(widyr)
+library(igraph)
+library(ggraph)
+tweets <- read.csv("data/dem_cand_tweets_2019_10_02.csv")
+sou <- read.csv("data/sou.csv", header = T)  
+data("stop_words")
+```
+
+# In class exercise
+
+### Load the data
+
+```{r clean-data}
+tweets <- tweets %>%
+  filter(!str_detect(text, "^RT")) %>%   #get rid of retweets
+  mutate(timestamp = ymd_hms(created_at)) %>%
+  select("timestamp","screen_name", "text")
+tweets %>%
+  slice(1:3)
+```
+
+### Remove symbols and unnest into one-word tokens
+
+```{r filter-data}
+remove_reg <- "&amp;|&lt;|&gt;"
+tidy_tweets <- tweets %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(word, text, token = "tweets")
+tidy_tweets %>%
+  slice(1:5)
+```
+
+```{r word-counts}
+counts <- tidy_tweets %>%
+  count(word, sort = T)
+counts %>%
+  slice(1:10)
+```
+
+```{r stop-words}
+tidy_tweets <- tidy_tweets %>%
+  filter(!word %in% stop_words $ word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]"))
+counts <- tidy_tweets %>%
+  count(word, sort = T)
+counts %>%
+  slice(1:10)
+```
+
+```{r word-freq}
+frequency_all <-  tidy_tweets %>%
+  count(word, sort = T) %>%
+  mutate(freq = n / sum(n)) 
+
+ggplot(frequency_all %>% top_n(10, freq) %>%
+         mutate(word = reorder(word, freq)), aes(x = word, y = freq))+
+  geom_col()+ 
+  coord_flip() 
+
+## frequencies by candidate
+frequency <- tidy_tweets %>%
+  group_by(screen_name) %>%
+  count(word, sort = T) %>%
+  left_join(tidy_tweets %>%
+              group_by(screen_name) %>%
+              summarise(total = n()),
+            by = "screen_name") %>%
+  mutate(freq = n / total)
+
+
+ggplot(frequency %>% 
+         # choose candidate here
+         filter(screen_name == "JoeBiden") %>% 
+         top_n(10, freq) %>%
+         mutate(word = reorder(word, freq)),
+       aes(x = word, y = freq))+
+  geom_col()+ 
+  coord_flip() 
+```
+
+### Sentiment analysis
+
+```{r ewarren-sentiment}
+tidy_tweets %>%
+  # choose candidate here
+  filter(screen_name == "ewarren") %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(sentiment) %>%
+  spread(sentiment, n) %>%
+  mutate(sentiment = positive - negative)
+```
+
+
+```{r bing-sentiment}
+bing_counts <- tidy_tweets %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = T) 
+bing_counts %>%
+  group_by(sentiment) %>%
+  top_n(10, n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x= word, y = n, fill = sentiment))+
+  geom_col(show.legend = F) +
+  facet_wrap(~sentiment, scales = "free_y")+
+  labs(y = "Contribution to sentiment", x = NULL) + 
+  coord_flip()
+```
+
+### Wordclouds
+
+```{r wordcloud, cache = T}
+tidy_tweets %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 60,scale=c(3,.5)))
+```
+
+
+### Comparing candidates: word frequency
+
+
+```{r cand-freqs}
+frequency <- frequency %>%
+  select(screen_name, word, freq) %>%
+  spread(screen_name, freq) %>%
+  arrange(BernieSanders, ewarren, JoeBiden, KamalaHarris)
+
+ggplot(frequency, aes(JoeBiden, ewarren))+
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = T, vjust = 1.5)+
+  scale_x_log10(labels = percent_format())+
+  scale_y_log10(labels = percent_format())+
+  geom_abline(color = "blue")
+```
+
+### Comparing candidates: word probabilities
+
+
+```{r}
+# choose candidates
+cands <- c("JoeBiden", "ewarren")
+
+# create dataframe of log odds ratios
+word_ratios <- tidy_tweets %>%
+  filter(screen_name %in% cands) %>%
+  filter(!str_detect(word, "^@")) %>%
+  count(word, screen_name) %>%
+  group_by(word) %>%
+  filter(sum(n) >= 10) %>% # only consider more frequently uses words
+  ungroup() %>%
+  spread(screen_name, n, fill = 0) %>%
+  mutate_if(is.numeric, list(~(. +1) / (sum(.) + 1))) %>%
+  mutate(logratio = log(eval(parse(text = cands[1]))/eval(parse(text = cands[2])))) %>%
+  select(word, logratio)%>%
+  arrange(desc(logratio))
+
+word_ratios 
+```
+
+```{r word-usage-diff}
+word_ratios %>% 
+  group_by(logratio < 0) %>%
+  top_n(20, abs(logratio)) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, logratio))%>%
+  ggplot(aes(word, logratio, fill = logratio < 0)) +
+  geom_col(show.legend = F) +
+  coord_flip() +
+  ylab(paste("log odds ratio", cands[1], "/", cands[2])) +
+  scale_fill_discrete(name = "", labels = c(cands[1], cands[2]))
+```
+
+### n-grams
+
+```{r bigram}
+tweet_bigrams <- tweets %>%
+  select(screen_name, text) %>%
+  mutate(text = str_remove_all(text, remove_reg))%>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+```
+
+```{r http-stop-words}
+my_stop_words <- tibble(word = c("http", "https"), lexicon = c("custom"))
+custom_stop_words <- bind_rows(my_stop_words, stop_words)
+
+bigrams_sep <- tweet_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") 
+bigrams_filtered <- bigrams_sep %>%
+  filter(!word1 %in% custom_stop_words$word,
+         !word1 %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word1, "[a-z]"), 
+         !word2 %in% custom_stop_words$word,
+         !word2 %in% str_remove_all(custom_stop_words$word, "'"),
+         str_detect(word2, "[a-z]"))
+```
+
+```{r custom-bigram-counts}
+bigram_counts <- bigrams_filtered %>%
+  count(word1, word2, sort = T)
+bigram_counts 
+```
+
+# On your own
+
+```{r sou-data}
+sou <- sou %>%
+  mutate(Text = as.character(Text))
+```
+
+1) Finish the code below to create a tidytext dataframe called `sou_tidy`.
+
+```{r sou-tidy}
+# sou_tidy <- sou %>%
+#   unnest_tokens(output = word, input = ?)
+```
+
+Before we start calculating word counts or frequencies, let's go ahead and remove the annoying stop words. With the Twitter data, we had to do a little extra work to remove the stop words due to the format of tweets. With regular text, we can use the simple `anti_join()` function to remove the stop words from the tidytext: **The code below will not run until you finish the above sections. When you do, change eval=F to eval=T and execute it.**
+
+```{r, eval=F}
+sou_tidy <- sou_tidy %>%
+  anti_join(stop_words, by = "word")
+```
+
+2) What are the five words that are used most frequently across the two presidents? 
+
+```{r}
+# sou_tidy %>%
+#   count(word, sort = T)
+```
+
+3. Interestingly, the word "applause" is used a lot in the State of the Union addresses. That is quite odd, but there is a reason for it! Run the following code and explain why that is:
+
+```{r}
+sou %>%
+  filter(str_detect(Text,"Applause")) %>%
+  select(Text) %>%
+  slice(1:5)
+```
+
+4. So we should remove the word "applause" from our tidytext. For similar reasons, we should remove the word "laughter". Create a custom list of stop words, and use it to create a new `sou_tidy` tidytext. Finally, display the ten most used words across the two presidents.
+
+```{r}
+# my_stop_words <- tibble(word = c(?, ?), lexicon = "custom")
+# custom_stop_words <- bind_rows(my_stop_words, stop_words)
+# sou_tidy <- ?
+```
+
+The following code calculates the word frequencies of Obama vs the word frequencies of Trump in their State of the Union addresses. **The code below will not run until you finish the above sections. When you do, change eval=F to eval=T and execute it.**
+
+```{r, eval=F}
+pres_frequency <- sou_tidy %>%
+  group_by(President) %>%
+  count(word, sort = T) %>%
+  left_join(sou_tidy %>%
+              group_by(President) %>%
+              summarise(total = n()),
+            by = "President") %>%
+  mutate(freq = n / total)
+pres_frequency %>%
+  slice(1:5)
+```
+
+5. Using `pres_frequency`, create a plot of the top 20 most frequently used terms of Obama, and another plot of the top 20 most frequently used terms of Trump. Comment on the similarities/differences.
+
+```{r}
+
+```
+
+6. Using the `bing` lexicon, analyze the sentiment of the State of the Unions across the two presidents. Looking at all the addresses, what is the most commonly used negative word, and what is the most commonly used positive word?
+
+```{r}
+
+```
+
+7. Calculate the overall sentiment of Obama's addresses, and also calculate the overall sentiment of Trump's addresses. Which president is more positive/negative in sentiment? (Hint: use code similar to the Twitter data, but consider using the `group_by()` function instead of `filter()`.) 
+
+```{r}
+
+```
+
+
+8. Make a word cloud for the top 50 words used in all the State of the Union addresses. (Note, the first time you knit this, it may take awhile.)
+
+```{r cache = T}
+
+```
+
+9. Lastly, we would appreciate any feedback you may have for us! Positive or negative, we welcome it all!
