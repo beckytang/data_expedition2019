@@ -1,5 +1,5 @@
 ---
-title: 'Data Expedition 2019 Summary: Sta 199'
+title: 'Data Expedition 2019 Summary: Text as Data (Introductory)'
 author: "Becky Tang and Graham Tierney"
 output:
   pdf_document: default
@@ -36,7 +36,7 @@ We focused on comparisons in word usage and sentiment between Biden and Warren, 
 
 ### Data
 
-The Twitter data were scraped using the `rtweet()` package in R. We obtained the 1200 most recent tweets at the time of the data expedition from Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren. In addition to the author and text, other variables include the timestamp of each tweet, if/which hashtag was used, and how many retweets and favorites a tweet garnered (as of July 24, 2019, the time of scraping). However, the analysis mainly focuses on the author and text. A benefit to this dataset is that each tweet is a complete body of text, allowing for easier determination or classification of the sentiment in a tweet as compared to analyzing an entire book or speech. This data also demonstrates the challenge of working with short text, as tweets are constrained to \textbf{280???} characters. 
+The Twitter data were scraped using the `rtweet()` package in R. We obtained the 1200 most recent tweets at the time of the data expedition from Joe Biden, Kamala Harris, Bernie Sanders, and Elizabeth Warren. In addition to the author and text, other variables include the timestamp of each tweet, if/which hashtag was used, and how many retweets and favorites a tweet garnered (as of July 24, 2019, the time of scraping). However, the analysis mainly focuses on the author and text. A benefit to this dataset is that each tweet is a complete body of text, allowing for easier determination or classification of the sentiment in a tweet as compared to analyzing an entire book or speech. This data also demonstrates the challenge of working with short text, as tweets are constrained to 280 characters. 
 
 The State of the Union address data used during the in-class exercise were obtained from The American Presidency Project (https://www.presidency.ucsb.edu/). There are four columns in the dataset: prsident, year, a sentence from the address, and the line number of that sentence. 
 
